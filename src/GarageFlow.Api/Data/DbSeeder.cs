@@ -96,18 +96,18 @@ public static class DbSeeder
         New("VEH-006", "CUS-004", "Suzuki", "Swift", 2017, "KO 5 PA 2323", "MA3EJKD1S00000555", "Petrol", 102300, "Grey"),
         New("VEH-007", "CUS-005", "Mahindra", "Scorpio", 2016, "LU 2 CHA 4545", "MA1TA2MHK00000666", "Diesel", 134500, "Black"),
         New("VEH-008", "CUS-006", "Kia", "Sonet", 2022, "BA 78 PA 8080", "MZBSSS1ULLA000777", "Petrol", 27800, "White"),
-        New("VEH-009", "CUS-006", "Bajaj", "Pulsar 220", 2020, "BA 55 PA 1010", "MD2A36FZ0LWX00888", "Petrol", 41200, "Red"),
+        New("VEH-009", "CUS-006", "Bajaj", "Pulsar 220", 2020, "BA 55 PA 1010", "MD2A36FZ0LWX00888", "Petrol", 41200, "Red", "Bike"),
         New("VEH-010", "CUS-007", "Toyota", "Yaris", 2019, "BP 1 PA 6767", "MBJB29BT200000999", "Petrol", 57300, "Silver"),
         New("VEH-011", "CUS-008", "Hyundai", "Creta", 2021, "NA 4 PA 3131", "MALC281CLMM01010", "Diesel", 61900, "Grey"),
-        New("VEH-012", "CUS-002", "Honda", "Activa 6G", 2021, "GA 6 PA 2020", "ME4JF505KMT01111", "Petrol", 22400, "Blue"),
+        New("VEH-012", "CUS-002", "Honda", "Activa 6G", 2021, "GA 6 PA 2020", "ME4JF505KMT01111", "Petrol", 22400, "Blue", "Bike"),
     ];
 
     private static Vehicle New(string id, string customerId, string make, string model, int year,
-        string plate, string vin, string fuel, int odometer, string color) =>
+        string plate, string vin, string fuel, int odometer, string color, string type = "Car") =>
         new()
         {
             Id = id, CustomerId = customerId, Make = make, Model = model, Year = year,
-            Plate = plate, Vin = vin, Fuel = fuel, Odometer = odometer, Color = color,
+            Plate = plate, Vin = vin, Fuel = fuel, Odometer = odometer, Color = color, Type = type,
         };
 
     private static JobCard[] JobCards() =>

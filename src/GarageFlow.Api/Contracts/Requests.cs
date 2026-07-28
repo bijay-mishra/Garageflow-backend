@@ -55,6 +55,9 @@ public class CreateVehicleRequest
     [Required, StringLength(40)] public string Plate { get; set; } = "";
     [StringLength(40)] public string Vin { get; set; } = "";
 
+    [AllowedValues("Bike", "Car", "Van", "Bus", "Truck", "Tractor")]
+    public string Type { get; set; } = "Car";
+
     [AllowedValues("Petrol", "Diesel", "Electric", "Hybrid", "CNG")]
     public string Fuel { get; set; } = "Petrol";
 
@@ -75,6 +78,9 @@ public class UpdateVehicleRequest
 
     // null has to be listed explicitly: AllowedValues rejects it otherwise, and
     // an omitted property is exactly what a partial update looks like.
+    [AllowedValues(null, "Bike", "Car", "Van", "Bus", "Truck", "Tractor")]
+    public string? Type { get; set; }
+
     [AllowedValues(null, "Petrol", "Diesel", "Electric", "Hybrid", "CNG")]
     public string? Fuel { get; set; }
 

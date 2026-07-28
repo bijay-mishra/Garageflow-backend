@@ -47,6 +47,9 @@ public record VehicleDto
     public required string Plate { get; init; }
     public required string Vin { get; init; }
 
+    /// <summary>Body class — one of Bike, Car, Van, Bus, Truck, Tractor.</summary>
+    public required string Type { get; init; }
+
     /// <summary>One of Petrol, Diesel, Electric, Hybrid, CNG.</summary>
     public required string Fuel { get; init; }
 

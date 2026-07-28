@@ -9,6 +9,13 @@ public static class Vocabulary
 {
     public static readonly string[] FuelTypes = ["Petrol", "Diesel", "Electric", "Hybrid", "CNG"];
 
+    /// <summary>
+    /// Body class, used to tell a two-wheeler from a bus at a glance. SUVs and
+    /// jeeps are filed under <c>Car</c> — the split that matters in the workshop
+    /// is light-vs-heavy, and a separate SUV category only blurs it.
+    /// </summary>
+    public static readonly string[] VehicleTypes = ["Bike", "Car", "Van", "Bus", "Truck", "Tractor"];
+
     /// <summary>Display order used by the dashboard status breakdown.</summary>
     public static readonly string[] JobStatuses =
         ["Open", "In Progress", "Awaiting Parts", "Completed", "Delivered", "Cancelled"];

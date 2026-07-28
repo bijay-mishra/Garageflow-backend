@@ -42,6 +42,7 @@ public static class Projections
             Year = v.Year,
             Plate = v.Plate,
             Vin = v.Vin,
+            Type = v.Type,
             Fuel = v.Fuel,
             Odometer = v.Odometer,
             Color = v.Color,

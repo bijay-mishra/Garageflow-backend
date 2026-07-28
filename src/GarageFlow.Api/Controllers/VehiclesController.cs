@@ -20,17 +20,24 @@ public class VehiclesController(GarageFlowDbContext db, ActivityLog activity) : 
     /// <remarks>
     /// Paged with <c>skip</c>/<c>take</c>; omit <c>take</c> for every row.
     /// Search matches plate, make, model or owner name. <c>fuel</c> filters to
-    /// one of Petrol, Diesel, Electric, Hybrid or CNG.
+    /// one of Petrol, Diesel, Electric, Hybrid or CNG; <c>type</c> to one of
+    /// Bike, Car, Van, Bus, Truck or Tractor.
     /// </remarks>
     [HttpGet]
     [ProducesResponseType<ApiResponse<PagedList<VehicleDto>>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<ApiResponse<PagedList<VehicleDto>>>> List(
-        [FromQuery] TableQuery query, [FromQuery] string? fuel, CancellationToken ct)
+        [FromQuery] TableQuery query,
+        [FromQuery] string? fuel,
+        [FromQuery] string? type,
+        CancellationToken ct)
     {
         var vehicles = db.Vehicles.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(fuel))
             vehicles = vehicles.Where(v => v.Fuel == fuel);
+
+        if (!string.IsNullOrWhiteSpace(type))
+            vehicles = vehicles.Where(v => v.Type == type);
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
@@ -87,6 +94,7 @@ public class VehiclesController(GarageFlowDbContext db, ActivityLog activity) : 
             Year = request.Year,
             Plate = request.Plate.Trim(),
             Vin = request.Vin.Trim(),
+            Type = request.Type,
             Fuel = request.Fuel,
             Odometer = request.Odometer,
             Color = request.Color.Trim(),
@@ -129,6 +137,7 @@ public class VehiclesController(GarageFlowDbContext db, ActivityLog activity) : 
         if (request.Year is { } year) vehicle.Year = year;
         if (request.Plate is not null) vehicle.Plate = request.Plate.Trim();
         if (request.Vin is not null) vehicle.Vin = request.Vin.Trim();
+        if (request.Type is not null) vehicle.Type = request.Type;
         if (request.Fuel is not null) vehicle.Fuel = request.Fuel;
         if (request.Odometer is { } odometer) vehicle.Odometer = odometer;
         if (request.Color is not null) vehicle.Color = request.Color.Trim();

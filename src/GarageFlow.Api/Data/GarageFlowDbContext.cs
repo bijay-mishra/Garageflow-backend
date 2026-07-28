@@ -75,6 +75,7 @@ public class GarageFlowDbContext(DbContextOptions<GarageFlowDbContext> options) 
             e.Property(x => x.Model).HasMaxLength(80);
             e.Property(x => x.Plate).HasMaxLength(40);
             e.Property(x => x.Vin).HasMaxLength(40);
+            e.Property(x => x.Type).HasMaxLength(20);
             e.Property(x => x.Fuel).HasMaxLength(20);
             e.Property(x => x.Color).HasMaxLength(40);
             e.Ignore(x => x.Label);

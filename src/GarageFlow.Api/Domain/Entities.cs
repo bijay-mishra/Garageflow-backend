@@ -30,6 +30,9 @@ public class Vehicle
     public string Plate { get; set; } = "";
     public string Vin { get; set; } = "";
 
+    /// <summary>One of <see cref="Vocabulary.VehicleTypes"/>.</summary>
+    public string Type { get; set; } = "Car";
+
     /// <summary>One of <see cref="Vocabulary.FuelTypes"/>.</summary>
     public string Fuel { get; set; } = "Petrol";
 
