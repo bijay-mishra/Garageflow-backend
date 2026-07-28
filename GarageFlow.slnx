@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GarageFlow.Api/GarageFlow.Api.csproj" />
+  </Folder>
+</Solution>
