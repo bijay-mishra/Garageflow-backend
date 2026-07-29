@@ -20,6 +20,26 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
+    },
+
+    // For running the mobile app on a real phone.
+    //
+    // The `http` profile binds to localhost, which is the loopback adapter and
+    // nothing else — a phone on the same wifi cannot reach it, and the failure
+    // looks like the server is down rather than unreachable. 0.0.0.0 binds
+    // every interface, so the machine answers on its LAN address too.
+    //
+    // Kept as a separate profile rather than changing `http`: binding all
+    // interfaces exposes the API to the whole network, which is fine on a home
+    // wifi and not something to do by default.
+    "phone": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://0.0.0.0:5100",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
     }
   }
 }

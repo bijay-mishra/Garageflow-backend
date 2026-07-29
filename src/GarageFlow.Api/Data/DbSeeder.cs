@@ -1,4 +1,5 @@
 using GarageFlow.Api.Domain;
+using GarageFlow.Api.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -31,6 +32,108 @@ public static class DbSeeder
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// Seeds the demo workshop's own details.
+    /// </summary>
+    /// <remarks>
+    /// The same values that were hardcoded in the dashboard's
+    /// <c>src/data/seed.ts</c>, now owned by the server so a workshop can edit
+    /// them. Gated on its own table, like the price list, so a database created
+    /// before this existed still gets one.
+    /// </remarks>
+    public static async Task SeedWorkshopAsync(GarageFlowDbContext db, CancellationToken ct = default)
+    {
+        if (await db.Workshops.AnyAsync(w => w.CompanyCode == DemoCompanyCode, ct)) return;
+
+        db.Workshops.Add(new Workshop
+        {
+            CompanyCode = DemoCompanyCode,
+            Name = "GarageFlow",
+            LegalName = "Valley Auto Care Pvt. Ltd.",
+            Address = "Ring Road, Kalanki, Kathmandu",
+            Phone = "+977 1-5234567",
+            Email = "hello@garageflow.demo",
+            TaxNumber = "601234567",
+            // Kalanki chowk, so the customer app has directions to draw on the
+            // first run rather than an empty map.
+            Latitude = 27.6939,
+            Longitude = 85.2810,
+            OpeningHours = "Sun–Fri 9:00–18:00 · Sat closed",
+            InvoiceFooter = "Goods once sold are not returnable. Warranty as per manufacturer terms.",
+            UpdatedAt = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+        });
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Seeds the workshop's price list — washing, detailing and the other extras
+    /// a job card can carry on top of parts and labour.
+    /// </summary>
+    /// <remarks>
+    /// Gated on its own table rather than folded into <see cref="SeedAsync"/>.
+    /// That one returns early when customers already exist, so a database
+    /// created before the catalogue arrived would never get one and every
+    /// service picker would open empty.
+    ///
+    /// Prices are Kathmandu-market placeholders. The whole point of the screen
+    /// is that the shop edits them, so treat these as a starting shape, not a
+    /// recommendation.
+    /// </remarks>
+    public static async Task SeedServicesAsync(GarageFlowDbContext db, CancellationToken ct = default)
+    {
+        if (await db.Services.AnyAsync(ct)) return;
+
+        db.Services.AddRange(ServiceCatalogue());
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static Service[] ServiceCatalogue() =>
+    [
+        // Washing — priced by how much vehicle there is to wash, which is why
+        // these are separate rows rather than one row with an argument at the
+        // counter.
+        Svc("SVC-001", "Bike wash", "Foam wash, chain clean and dry.", "Washing", 350, 30, "Bike"),
+        Svc("SVC-002", "Car wash — exterior", "Foam wash, wheels and dry.", "Washing", 700, 45, "Car,Van"),
+        Svc("SVC-003", "Car wash — full", "Exterior wash plus interior vacuum and dashboard wipe.", "Washing", 1200, 75, "Car,Van"),
+        Svc("SVC-004", "Heavy vehicle wash", "Body and underbody wash for buses, trucks and tractors.", "Washing", 2500, 120, "Bus,Truck,Tractor"),
+        Svc("SVC-005", "Underbody wash", "Chassis and wheel-arch wash — worth it after monsoon.", "Washing", 900, 40, "Car,Van,Bus,Truck,Tractor"),
+
+        // Detailing
+        Svc("SVC-006", "Interior deep clean", "Seats, carpets and vents shampooed and dried.", "Detailing", 3500, 180, "Car,Van"),
+        Svc("SVC-007", "Wax polish", "Machine polish and wax, one coat.", "Detailing", 2800, 150, "Car,Van"),
+        Svc("SVC-008", "Ceramic coating", "Paint correction and a 12-month ceramic coat.", "Detailing", 18000, 480, "Car,Van"),
+        Svc("SVC-009", "Headlight restoration", "Sanded and re-clarified, per pair.", "Detailing", 1600, 60, "Car,Van"),
+
+        // Maintenance
+        Svc("SVC-010", "Wheel alignment", "Four-wheel alignment on the rig.", "Maintenance", 1800, 60, "Car,Van"),
+        Svc("SVC-011", "Wheel balancing", "All four wheels balanced.", "Maintenance", 1200, 45, "Car,Van"),
+        Svc("SVC-012", "AC gas refill", "Evacuate, leak-check and recharge.", "Maintenance", 4500, 90, "Car,Van,Bus,Truck"),
+        Svc("SVC-013", "Engine bay clean", "Degrease and steam clean.", "Maintenance", 1500, 60),
+        Svc("SVC-014", "Battery check & terminal clean", "Load test and terminal service.", "Maintenance", 500, 20),
+
+        // Inspection
+        Svc("SVC-015", "Pre-purchase inspection", "Full 40-point check with a written report.", "Inspection", 3000, 120, "Car,Van"),
+        Svc("SVC-016", "Computer diagnostics", "OBD scan with fault codes read and explained.", "Inspection", 1500, 45, "Car,Van,Bus,Truck"),
+
+        // Convenience — the shop's own extras. Pickup is bookable; the courtesy
+        // wash is not, because it is something the shop throws in, not something
+        // a customer orders.
+        Svc("SVC-017", "Pickup & drop", "We collect the vehicle and return it, inside the ring road.", "Convenience", 800, 0),
+        Svc("SVC-018", "Courtesy wash", "Quick rinse before handover.", "Convenience", 0, 20, bookable: false),
+    ];
+
+    private static Service Svc(
+        string id, string name, string description, string category,
+        decimal price, int durationMinutes, string vehicleTypes = "", bool bookable = true) =>
+        new()
+        {
+            Id = id, Name = name, Description = description, Category = category,
+            Price = price, DurationMinutes = durationMinutes, VehicleTypes = vehicleTypes,
+            IsActive = true, IsBookable = bookable,
+            CreatedAt = new DateOnly(2026, 7, 1),
+        };
+
     // ── Default sign-in ──────────────────────────────────────────────────────
     // The credentials the login screen is prefilled with. Fine for a local demo
     // and unacceptable anywhere else — change the password on first sign-in, or
@@ -40,50 +143,128 @@ public static class DbSeeder
     public const string DemoEmail = "bijaymishra276@gmail.com";
     public const string DemoPassword = "demo1234";
 
-    /// <summary>Seeds the demo owner account if no users exist yet.</summary>
+    // The two mobile logins. Same company code — the app asks for it on the
+    // sign-in screen exactly as the dashboard does.
+    public const string DemoMechanicEmail = "mechanic@garageflow.demo";
+    public const string DemoCustomerEmail = "customer@garageflow.demo";
+
+    /// <summary>
+    /// The name this seeded mechanic is assigned under. Matches a mechanic
+    /// already used by the seeded job cards, so the app has work to show on the
+    /// first run rather than an empty list.
+    /// </summary>
+    public const string DemoMechanicName = "Suresh Lama";
+
+    /// <summary>Customer the seeded customer login speaks for.</summary>
+    public const string DemoCustomerId = "CUS-001";
+
+    /// <summary>
+    /// Seeds the demo accounts: the workshop owner, one mechanic and one
+    /// customer, which is enough to sign into all three clients.
+    /// </summary>
+    /// <remarks>
+    /// Checked per account rather than "return if any user exists". The mobile
+    /// roles arrived after the owner account did, so a database created before
+    /// them would otherwise never get a mechanic or customer login and the apps
+    /// would have nothing to sign in with.
+    ///
+    /// Only ever adds. An account that exists is left exactly as it is, so a
+    /// changed password or a renamed mechanic survives every restart.
+    /// </remarks>
     public static async Task SeedUsersAsync(
         GarageFlowDbContext db, IPasswordHasher<User> passwordHasher, CancellationToken ct = default)
     {
-        if (await db.Users.AnyAsync(ct)) return;
+        var existingEmails = await db.Users
+            .Where(u => u.CompanyCode == DemoCompanyCode)
+            .Select(u => u.Email)
+            .ToListAsync(ct);
 
-        var user = new User
+        var added = new List<User>();
+
+        if (!existingEmails.Contains(DemoEmail))
+            added.Add(NewUser(DemoEmail, "Bijay Mishra", "Owner", "+977 9801234567"));
+
+        if (!existingEmails.Contains(DemoMechanicEmail))
         {
-            Id = "USR-001",
+            var mechanic = NewUser(
+                DemoMechanicEmail, DemoMechanicName, Vocabulary.MechanicRole, "+977 9845567788");
+
+            mechanic.MechanicName = DemoMechanicName;
+            added.Add(mechanic);
+        }
+
+        // A customer login with nothing to speak for cannot show anything, so it
+        // is only created when that customer is actually on file — a database
+        // holding real data rather than the demo rows should not get an account
+        // pointing at a customer that does not exist.
+        if (!existingEmails.Contains(DemoCustomerEmail)
+            && await db.Customers.AnyAsync(c => c.Id == DemoCustomerId, ct))
+        {
+            var customer = NewUser(
+                DemoCustomerEmail, "Ramesh Shrestha", Vocabulary.CustomerRole, "+977 9841012345");
+
+            customer.CustomerId = DemoCustomerId;
+            added.Add(customer);
+        }
+
+        if (added.Count == 0) return;
+
+        // Ids continue from whatever is already there rather than restarting at
+        // USR-001, which would collide with the existing owner.
+        var ids = await db.Users.Select(u => u.Id).ToListAsync(ct);
+
+        foreach (var user in added)
+        {
+            user.Id = Ids.Next(ids, "USR");
+            ids.Add(user.Id);
+
+            // Hashing needs the user instance, so the hash is set after the id.
+            user.PasswordHash = passwordHasher.HashPassword(user, DemoPassword);
+        }
+
+        db.Users.AddRange(added);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Id is assigned by the caller, which knows what is already taken.</summary>
+    private static User NewUser(string email, string fullName, string role, string phone) =>
+        new()
+        {
+            Id = string.Empty,
             CompanyCode = DemoCompanyCode,
-            Email = DemoEmail,
-            FullName = "Bijay Mishra",
-            Phone = "+977 9801234567",
-            Role = "Owner",
+            Email = email,
+            FullName = fullName,
+            Phone = phone,
+            Role = role,
             Workshop = "GarageFlow HQ",
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
             PasswordHash = string.Empty,
         };
 
-        // Hashing needs the user instance, so the hash is set after construction.
-        user.PasswordHash = passwordHasher.HashPassword(user, DemoPassword);
-
-        db.Users.Add(user);
-        await db.SaveChangesAsync(ct);
-    }
-
+    // Coordinates are the centre of the named locality, not a doorstep — enough
+    // to put a marker in the right part of the right town, which is what the map
+    // is for. Two customers are deliberately left without a pin: most real
+    // records will not have one, and every screen has to look right that way.
     private static Customer[] Customers() =>
     [
-        New("CUS-001", "Ramesh Shrestha", "+977 9841012345", "ramesh.s@gmail.com", "Baneshwor, Kathmandu", "2025-03-11", "bg-brand-500"),
-        New("CUS-002", "Sita Gurung", "+977 9802233445", "sita.gurung@outlook.com", "Lakeside, Pokhara", "2025-05-02", "bg-accent-500"),
-        New("CUS-003", "Bikash Tamang", "+977 9851122334", "bikash.tmg@gmail.com", "Patan, Lalitpur", "2024-11-20", "bg-emerald-500"),
-        New("CUS-004", "Anjali Rai", "+977 9818899776", "anjali.rai@gmail.com", "Dharan, Sunsari", "2026-01-14", "bg-rose-500"),
+        New("CUS-001", "Ramesh Shrestha", "+977 9841012345", "ramesh.s@gmail.com", "Baneshwor, Kathmandu", "2025-03-11", "bg-brand-500", 27.6893, 85.3436),
+        New("CUS-002", "Sita Gurung", "+977 9802233445", "sita.gurung@outlook.com", "Lakeside, Pokhara", "2025-05-02", "bg-accent-500", 28.2096, 83.9556),
+        New("CUS-003", "Bikash Tamang", "+977 9851122334", "bikash.tmg@gmail.com", "Patan, Lalitpur", "2024-11-20", "bg-emerald-500", 27.6766, 85.3250),
+        New("CUS-004", "Anjali Rai", "+977 9818899776", "anjali.rai@gmail.com", "Dharan, Sunsari", "2026-01-14", "bg-rose-500", 26.8065, 87.2846),
         New("CUS-005", "Deepak Karki", "+977 9843344556", "dkarki@yahoo.com", "Butwal, Rupandehi", "2025-08-09", "bg-violet-500"),
-        New("CUS-006", "Nabin Maharjan", "+977 9860011223", "nabin.mhj@gmail.com", "Kirtipur, Kathmandu", "2025-06-30", "bg-cyan-500"),
-        New("CUS-007", "Puja Thapa", "+977 9812344321", "puja.thapa@gmail.com", "Bhaktapur", "2026-04-18", "bg-orange-500"),
+        New("CUS-006", "Nabin Maharjan", "+977 9860011223", "nabin.mhj@gmail.com", "Kirtipur, Kathmandu", "2025-06-30", "bg-cyan-500", 27.6789, 85.2774),
+        New("CUS-007", "Puja Thapa", "+977 9812344321", "puja.thapa@gmail.com", "Bhaktapur", "2026-04-18", "bg-orange-500", 27.6710, 85.4298),
         New("CUS-008", "Hari Bahadur K.C.", "+977 9857766554", "haribdr.kc@gmail.com", "Hetauda, Makwanpur", "2025-09-25", "bg-teal-500"),
     ];
 
-    private static Customer New(string id, string name, string phone, string email, string address, string createdAt, string color) =>
+    private static Customer New(string id, string name, string phone, string email, string address,
+        string createdAt, string color, double? latitude = null, double? longitude = null) =>
         new()
         {
             Id = id, Name = name, Phone = phone, Email = email, Address = address,
             CreatedAt = DateOnly.Parse(createdAt), AvatarColor = color,
+            Latitude = latitude, Longitude = longitude,
         };
 
     private static Vehicle[] Vehicles() =>

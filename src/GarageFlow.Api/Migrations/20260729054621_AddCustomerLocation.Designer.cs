@@ -4,6 +4,7 @@ using GarageFlow.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace GarageFlow.Api.Migrations
 {
     [DbContext(typeof(GarageFlowDbContext))]
-    partial class GarageFlowDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260729054621_AddCustomerLocation")]
+    partial class AddCustomerLocation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -188,169 +191,6 @@ namespace GarageFlow.Api.Migrations
                     b.HasIndex("Phone");
 
                     b.ToTable("Customers", (string)null);
-                });
-
-            modelBuilder.Entity("GarageFlow.Api.Domain.CustomerRegistration", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("Attempts")
-                        .HasColumnType("int");
-
-                    b.Property<string>("CodeHash")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
-
-                    b.Property<DateTime?>("ConsumedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Contact")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("nvarchar(160)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CustomerId")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("CompanyCode", "Contact");
-
-                    b.ToTable("CustomerRegistrations", (string)null);
-                });
-
-            modelBuilder.Entity("GarageFlow.Api.Domain.Delivery", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("Address")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.Property<DateTime?>("ChosenAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CustomerId")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<double?>("DistanceKm")
-                        .HasColumnType("float");
-
-                    b.Property<string>("Driver")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("nvarchar(120)");
-
-                    b.Property<DateTime?>("DriverAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<double?>("DriverLatitude")
-                        .HasColumnType("float");
-
-                    b.Property<double?>("DriverLongitude")
-                        .HasColumnType("float");
-
-                    b.Property<decimal>("Fee")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("JobCardId")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<double?>("Latitude")
-                        .HasColumnType("float");
-
-                    b.Property<double?>("Longitude")
-                        .HasColumnType("float");
-
-                    b.Property<string>("Method")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateTime?>("StartedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("JobCardId")
-                        .IsUnique();
-
-                    b.HasIndex("Status");
-
-                    b.ToTable("Deliveries", (string)null);
-                });
-
-            modelBuilder.Entity("GarageFlow.Api.Domain.DeliveryPoint", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<double?>("AccuracyMetres")
-                        .HasColumnType("float");
-
-                    b.Property<DateTime>("At")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeliveryId")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<double>("Latitude")
-                        .HasColumnType("float");
-
-                    b.Property<double>("Longitude")
-                        .HasColumnType("float");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DeliveryId", "At");
-
-                    b.ToTable("DeliveryPoints", (string)null);
                 });
 
             modelBuilder.Entity("GarageFlow.Api.Domain.Invoice", b =>
@@ -624,18 +464,6 @@ namespace GarageFlow.Api.Migrations
                     b.Property<DateTime>("At")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("Channel")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
-
-                    b.Property<string>("FailureReason")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.Property<DateTime>("InitiatedAt")
-                        .HasColumnType("datetime2");
-
                     b.Property<string>("InvoiceId")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -646,28 +474,9 @@ namespace GarageFlow.Api.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
-                    b.Property<string>("ProviderRef")
-                        .HasMaxLength(120)
-                        .HasColumnType("nvarchar(120)");
-
-                    b.Property<string>("Reference")
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
                     b.HasKey("Id");
 
                     b.HasIndex("InvoiceId");
-
-                    b.HasIndex("Reference")
-                        .IsUnique()
-                        .HasFilter("[Reference] IS NOT NULL");
-
-                    b.HasIndex("Status", "Channel");
 
                     b.ToTable("Payments", (string)null);
                 });
@@ -896,84 +705,6 @@ namespace GarageFlow.Api.Migrations
                     b.ToTable("Vehicles", (string)null);
                 });
 
-            modelBuilder.Entity("GarageFlow.Api.Domain.Workshop", b =>
-                {
-                    b.Property<string>("CompanyCode")
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
-
-                    b.Property<string>("Address")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.Property<decimal>("DeliveryBaseFee")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<bool>("DeliveryEnabled")
-                        .HasColumnType("bit");
-
-                    b.Property<decimal>("DeliveryFreeAbove")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<double>("DeliveryMaxKm")
-                        .HasColumnType("float");
-
-                    b.Property<decimal>("DeliveryPerKm")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("nvarchar(160)");
-
-                    b.Property<string>("InvoiceFooter")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<double?>("Latitude")
-                        .HasColumnType("float");
-
-                    b.Property<string>("LegalName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<double?>("Longitude")
-                        .HasColumnType("float");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("nvarchar(160)");
-
-                    b.Property<string>("OpeningHours")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Phone")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
-
-                    b.Property<string>("TaxNumber")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("CompanyCode");
-
-                    b.ToTable("Workshops", (string)null);
-                });
-
             modelBuilder.Entity("GarageFlow.Api.Domain.Booking", b =>
                 {
                     b.HasOne("GarageFlow.Api.Domain.Customer", "Customer")
@@ -1017,47 +748,6 @@ namespace GarageFlow.Api.Migrations
                     b.Navigation("Booking");
 
                     b.Navigation("Service");
-                });
-
-            modelBuilder.Entity("GarageFlow.Api.Domain.CustomerRegistration", b =>
-                {
-                    b.HasOne("GarageFlow.Api.Domain.Customer", "Customer")
-                        .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Customer");
-                });
-
-            modelBuilder.Entity("GarageFlow.Api.Domain.Delivery", b =>
-                {
-                    b.HasOne("GarageFlow.Api.Domain.Customer", "Customer")
-                        .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("GarageFlow.Api.Domain.JobCard", "JobCard")
-                        .WithMany()
-                        .HasForeignKey("JobCardId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Customer");
-
-                    b.Navigation("JobCard");
-                });
-
-            modelBuilder.Entity("GarageFlow.Api.Domain.DeliveryPoint", b =>
-                {
-                    b.HasOne("GarageFlow.Api.Domain.Delivery", "Delivery")
-                        .WithMany("Trail")
-                        .HasForeignKey("DeliveryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Delivery");
                 });
 
             modelBuilder.Entity("GarageFlow.Api.Domain.Invoice", b =>
@@ -1175,11 +865,6 @@ namespace GarageFlow.Api.Migrations
                     b.Navigation("Invoices");
 
                     b.Navigation("Vehicles");
-                });
-
-            modelBuilder.Entity("GarageFlow.Api.Domain.Delivery", b =>
-                {
-                    b.Navigation("Trail");
                 });
 
             modelBuilder.Entity("GarageFlow.Api.Domain.Invoice", b =>

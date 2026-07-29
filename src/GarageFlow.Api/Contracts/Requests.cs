@@ -29,6 +29,22 @@ public class CreateCustomerRequest
 
     [StringLength(300)]
     public string Address { get; set; } = "";
+
+    /// <summary>
+    /// Map pin. Optional — most customers will never have one, and a blank pin
+    /// is not a validation failure.
+    /// </summary>
+    /// <remarks>
+    /// Ranges are checked because a swapped lat/lng pair is the single most
+    /// common way this goes wrong, and 85.32 degrees of latitude is the Arctic
+    /// rather than Kathmandu. The check catches the obviously impossible; it
+    /// cannot catch a pin dropped in the wrong street.
+    /// </remarks>
+    [Range(-90, 90, ErrorMessage = "Latitude must be between -90 and 90.")]
+    public double? Latitude { get; set; }
+
+    [Range(-180, 180, ErrorMessage = "Longitude must be between -180 and 180.")]
+    public double? Longitude { get; set; }
 }
 
 public class UpdateCustomerRequest
@@ -38,6 +54,19 @@ public class UpdateCustomerRequest
     [EmailAddress, StringLength(160)] public string? Email { get; set; }
     [StringLength(300)] public string? Address { get; set; }
     [StringLength(40)] public string? AvatarColor { get; set; }
+
+    [Range(-90, 90, ErrorMessage = "Latitude must be between -90 and 90.")]
+    public double? Latitude { get; set; }
+
+    [Range(-180, 180, ErrorMessage = "Longitude must be between -180 and 180.")]
+    public double? Longitude { get; set; }
+
+    /// <summary>
+    /// Send true to remove the pin. Needed because a partial update reads an
+    /// absent property as "leave it alone", so there is otherwise no way to
+    /// express "this pin was wrong, take it off".
+    /// </summary>
+    public bool? ClearLocation { get; set; }
 }
 
 // ── Vehicles ─────────────────────────────────────────────────────────────────
@@ -96,8 +125,32 @@ public class JobLineRequest
     [Range(0, 100_000)] public decimal Qty { get; set; }
     [Range(0, 100_000_000)] public decimal UnitPrice { get; set; }
 
-    [AllowedValues("labour", "part")]
+    [AllowedValues("labour", "part", "service")]
     public string Kind { get; set; } = "part";
+
+    /// <summary>
+    /// Set when this line came from the price list. Optional, and never trusted
+    /// for the price — the description and amount on this request are what get
+    /// billed, so an advisor can still discount a wash on the day.
+    /// </summary>
+    [StringLength(20)]
+    public string? ServiceId { get; set; }
+}
+
+/// <summary>
+/// Appends catalogue services to an existing job card.
+/// </summary>
+/// <remarks>
+/// Separate from the full update because it is a different action with a
+/// different risk. Updating a job card replaces the whole line set, so a client
+/// that sends a stale copy silently wipes work someone else added; this only
+/// ever adds, which is what "the car also needs a wash" means.
+/// </remarks>
+public class AddJobServicesRequest
+{
+    /// <summary>Catalogue ids. Anything already on the job is skipped, not duplicated.</summary>
+    [Required, MinLength(1, ErrorMessage = "Choose at least one service.")]
+    public List<string> ServiceIds { get; set; } = [];
 }
 
 public class CreateJobCardRequest
@@ -139,6 +192,54 @@ public class UpdateJobCardRequest
 
     /// <summary>When supplied, replaces the whole line set.</summary>
     public List<JobLineRequest>? Lines { get; set; }
+}
+
+// ── Service catalogue ────────────────────────────────────────────────────────
+
+public class CreateServiceRequest
+{
+    [Required, StringLength(160, MinimumLength = 1)]
+    public string Name { get; set; } = "";
+
+    [StringLength(500)] public string Description { get; set; } = "";
+
+    [AllowedValues("Washing", "Detailing", "Maintenance", "Repair", "Inspection", "Convenience", "Other")]
+    public string Category { get; set; } = "Other";
+
+    [Range(0, 100_000_000)] public decimal Price { get; set; }
+
+    /// <summary>Rough bay time in minutes. 0 when the shop does not quote one.</summary>
+    [Range(0, 10_000)] public int DurationMinutes { get; set; }
+
+    /// <summary>
+    /// Vehicle types this is offered for. Leave empty for every vehicle — which
+    /// is right for an AC regas and wrong for a wash, since washing a bus is not
+    /// the job that washing a scooter is.
+    /// </summary>
+    public List<string> AppliesTo { get; set; } = [];
+
+    public bool IsActive { get; set; } = true;
+
+    /// <summary>False keeps it off the customer app; the shop can still add it.</summary>
+    public bool IsBookable { get; set; } = true;
+}
+
+public class UpdateServiceRequest
+{
+    [StringLength(160, MinimumLength = 1)] public string? Name { get; set; }
+    [StringLength(500)] public string? Description { get; set; }
+
+    [AllowedValues(null, "Washing", "Detailing", "Maintenance", "Repair", "Inspection", "Convenience", "Other")]
+    public string? Category { get; set; }
+
+    [Range(0, 100_000_000)] public decimal? Price { get; set; }
+    [Range(0, 10_000)] public int? DurationMinutes { get; set; }
+
+    /// <summary>Send an empty list to clear the restriction; omit to leave it alone.</summary>
+    public List<string>? AppliesTo { get; set; }
+
+    public bool? IsActive { get; set; }
+    public bool? IsBookable { get; set; }
 }
 
 // ── Invoices ─────────────────────────────────────────────────────────────────
@@ -185,6 +286,110 @@ public class RecordPaymentRequest
 
     [AllowedValues("Cash", "Card", "eSewa", "Khalti", "Bank Transfer")]
     public string Method { get; set; } = "Cash";
+
+    /// <summary>
+    /// The bank slip number, the wallet's transaction id, whatever the customer
+    /// showed at the counter. Optional, and the only thing that makes a manually
+    /// recorded transfer reconcilable later.
+    /// </summary>
+    [StringLength(120)]
+    public string? Reference { get; set; }
+}
+
+// ── Online payment ───────────────────────────────────────────────────────────
+
+public class StartPaymentRequest
+{
+    [Required, StringLength(20)]
+    public string InvoiceId { get; set; } = "";
+
+    /// <summary>
+    /// Which gateway. Only wallets appear here — cash, card and bank transfer
+    /// are recorded by staff after the fact and have no online flow.
+    /// </summary>
+    [AllowedValues("eSewa", "Khalti")]
+    public string Provider { get; set; } = "eSewa";
+}
+
+/// <summary>
+/// Asks the server to confirm an attempt with the gateway.
+/// </summary>
+/// <remarks>
+/// Used by the app when the customer returns from the wallet. Harmless to call
+/// repeatedly — a settled payment answers the same way every time.
+/// </remarks>
+public class VerifyPaymentRequest
+{
+    [Required, StringLength(64)]
+    public string Reference { get; set; } = "";
+
+    /// <summary>Whatever the gateway handed back, if the client caught it.</summary>
+    [StringLength(4000)]
+    public string? Data { get; set; }
+}
+
+// ── Handover ─────────────────────────────────────────────────────────────────
+
+public class ChooseDeliveryRequest
+{
+    [AllowedValues("Pickup", "HomeDelivery")]
+    public string Method { get; set; } = "Pickup";
+}
+
+public class StartDeliveryRequest
+{
+    /// <summary>
+    /// Who is driving. Staff may name anyone; a mechanic naming themselves is
+    /// ignored in favour of their own account, so a driver cannot log a trip
+    /// under somebody else's name.
+    /// </summary>
+    [StringLength(120)]
+    public string? Driver { get; set; }
+}
+
+public class DeliveryPingRequest
+{
+    [Range(-90, 90)] public double Latitude { get; set; }
+    [Range(-180, 180)] public double Longitude { get; set; }
+
+    /// <summary>Metres of GPS uncertainty the phone reported. Optional.</summary>
+    [Range(0, 100_000)] public double? AccuracyMetres { get; set; }
+}
+
+// ── Workshop ─────────────────────────────────────────────────────────────────
+
+public class UpdateWorkshopRequest
+{
+    [StringLength(160)] public string? Name { get; set; }
+    [StringLength(200)] public string? LegalName { get; set; }
+    [StringLength(300)] public string? Address { get; set; }
+    [StringLength(40)] public string? Phone { get; set; }
+    [EmailAddress, StringLength(160)] public string? Email { get; set; }
+    [StringLength(40)] public string? TaxNumber { get; set; }
+    [StringLength(200)] public string? OpeningHours { get; set; }
+    [StringLength(500)] public string? InvoiceFooter { get; set; }
+
+    [Range(-90, 90, ErrorMessage = "Latitude must be between -90 and 90.")]
+    public double? Latitude { get; set; }
+
+    [Range(-180, 180, ErrorMessage = "Longitude must be between -180 and 180.")]
+    public double? Longitude { get; set; }
+
+    /// <summary>Send true to remove the pin — see UpdateCustomerRequest for why.</summary>
+    public bool? ClearLocation { get; set; }
+
+    // ── Home delivery pricing ────────────────────────────────────────────────
+
+    public bool? DeliveryEnabled { get; set; }
+
+    [Range(0, 100_000)] public decimal? DeliveryBaseFee { get; set; }
+    [Range(0, 10_000)] public decimal? DeliveryPerKm { get; set; }
+
+    /// <summary>Bills at or above this are delivered free. Zero disables the waiver.</summary>
+    [Range(0, 100_000_000)] public decimal? DeliveryFreeAbove { get; set; }
+
+    /// <summary>Furthest the shop will go. Zero means no limit.</summary>
+    [Range(0, 500)] public double? DeliveryMaxKm { get; set; }
 }
 
 // ── Query parameters ─────────────────────────────────────────────────────────

@@ -1,6 +1,56 @@
 using System.ComponentModel.DataAnnotations;
 
+// ── Customer self-registration ───────────────────────────────────────────────
+// Two legs. The first proves the person is a customer the workshop already
+// holds, by sending a code to the contact already on that record; the second
+// redeems it. There is no open sign-up: a stranger cannot create an account, and
+// a real customer's vehicles and history are there on first sign-in.
+
 namespace GarageFlow.Api.Contracts;
+
+public class StartRegistrationRequest
+{
+    [Required, StringLength(40)]
+    public string CompanyCode { get; set; } = "";
+
+    /// <summary>
+    /// The phone or email the workshop has on file. Either is accepted, because
+    /// a customer will not know which one the shop wrote down.
+    /// </summary>
+    [Required, StringLength(160, MinimumLength = 4)]
+    public string Contact { get; set; } = "";
+}
+
+public class CompleteRegistrationRequest
+{
+    [Required, StringLength(40)]
+    public string CompanyCode { get; set; } = "";
+
+    [Required, StringLength(160, MinimumLength = 4)]
+    public string Contact { get; set; } = "";
+
+    [Required, StringLength(6, MinimumLength = 6, ErrorMessage = "The code is six digits.")]
+    public string Code { get; set; } = "";
+
+    /// <summary>
+    /// The email this account will sign in with. Defaults to the contact when
+    /// that was an email, so most people never see this field.
+    /// </summary>
+    [EmailAddress, StringLength(160)]
+    public string? Email { get; set; }
+
+    [Required, StringLength(200, MinimumLength = 8, ErrorMessage = "Password must be at least 8 characters.")]
+    public string Password { get; set; } = "";
+}
+
+/// <summary>What the app needs after asking for a code.</summary>
+public record RegistrationStartedDto
+{
+    /// <summary>Where the code went, masked — "r••••@gmail.com".</summary>
+    public required string SentTo { get; init; }
+
+    public required int ExpiresInMinutes { get; init; }
+}
 
 // ── Auth requests ────────────────────────────────────────────────────────────
 
@@ -73,12 +123,23 @@ public record AuthUserDto
     public required string Email { get; init; }
     public required string Name { get; init; }
 
-    /// <summary>Owner, Manager or Advisor.</summary>
+    /// <summary>Owner, Manager, Advisor, Mechanic or Customer.</summary>
     public required string Role { get; init; }
 
     public required string Workshop { get; init; }
     public required string CompanyCode { get; init; }
     public string? Phone { get; init; }
+
+    // ── Mobile ───────────────────────────────────────────────────────────────
+    // Null for staff. The app reads these straight off the login response so it
+    // knows which shell to show and which customer it is speaking for, without
+    // a second round trip.
+
+    /// <summary>Set for a Mechanic — the name they are assigned under on jobs.</summary>
+    public string? MechanicName { get; init; }
+
+    /// <summary>Set for a Customer — the customer record this login owns.</summary>
+    public string? CustomerId { get; init; }
 }
 
 /// <summary>What a successful login or refresh returns.</summary>

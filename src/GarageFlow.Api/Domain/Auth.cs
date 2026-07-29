@@ -26,6 +26,28 @@ public class User
     /// <summary>Workshop shown in the topbar.</summary>
     public string Workshop { get; set; } = "";
 
+    // ── Mobile app links ─────────────────────────────────────────────────────
+    // Staff accounts leave both of these null. The two mobile roles each need a
+    // way back to the data they own, and the two links are deliberately
+    // separate rather than one polymorphic column: a mechanic is identified by
+    // the name written on job cards, a customer by a real foreign key.
+
+    /// <summary>
+    /// For a <c>Mechanic</c>: the name this person is assigned under on job
+    /// cards, matching <see cref="JobCard.Mechanic"/>.
+    /// </summary>
+    /// <remarks>
+    /// A name rather than a foreign key because job cards have always recorded
+    /// their mechanic as free text, and existing rows have to keep working.
+    /// Assignment stays a plain string on the job; this column is what lets an
+    /// account claim those rows.
+    /// </remarks>
+    public string? MechanicName { get; set; }
+
+    /// <summary>For a <c>Customer</c>: the customer record this login speaks for.</summary>
+    public string? CustomerId { get; set; }
+    public Customer? Customer { get; set; }
+
     /// <summary>A disabled user keeps their history but cannot sign in.</summary>
     public bool IsActive { get; set; } = true;
 

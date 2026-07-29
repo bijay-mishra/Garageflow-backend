@@ -8,10 +8,33 @@ public class Customer
     public string Phone { get; set; } = "";
     public string Email { get; set; } = "";
     public string Address { get; set; } = "";
+
+    /// <summary>
+    /// Where the customer is, as dropped on a map. Null until somebody places a
+    /// pin — which is most customers, and has to stay fine.
+    /// </summary>
+    /// <remarks>
+    /// Kept alongside <see cref="Address"/> rather than replacing it. The two
+    /// answer different questions: the address is what you write on an invoice
+    /// and read out on the phone, the pin is what a pickup-and-drop driver
+    /// actually navigates to. In Kathmandu especially, "Baneshwor, near the
+    /// temple" is a real address and a useless destination.
+    ///
+    /// Stored as plain doubles, not a spatial type. Nothing here asks a
+    /// geographic question — no "customers within 5km" — and a
+    /// <c>geography</c> column would tie the schema to SQL Server for a feature
+    /// that is two numbers and a marker.
+    /// </remarks>
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+
     public DateOnly CreatedAt { get; set; }
 
     /// <summary>Tailwind class used for the list avatar, e.g. <c>bg-brand-500</c>.</summary>
     public string AvatarColor { get; set; } = "bg-brand-500";
+
+    /// <summary>True when there is a pin to show on a map.</summary>
+    public bool HasLocation => Latitude is not null && Longitude is not null;
 
     public List<Vehicle> Vehicles { get; set; } = [];
     public List<Invoice> Invoices { get; set; } = [];
@@ -72,6 +95,9 @@ public class JobCard
 
     public List<JobLine> Lines { get; set; } = [];
 
+    /// <summary>Photos the mechanic attached from the mobile app.</summary>
+    public List<JobPhoto> Photos { get; set; } = [];
+
     /// <summary>Sum of every line (qty × unit price). Never stored — always derived.</summary>
     public decimal Total => Lines.Sum(l => l.Qty * l.UnitPrice);
 }
@@ -91,6 +117,19 @@ public class JobLine
 
     /// <summary>One of <see cref="Vocabulary.JobLineKinds"/>.</summary>
     public string Kind { get; set; } = "part";
+
+    /// <summary>
+    /// The catalogue entry this line came from, when it came from one. Null for
+    /// anything typed in by hand, which is most parts and labour.
+    /// </summary>
+    /// <remarks>
+    /// A link, not a lookup. <see cref="Description"/> and
+    /// <see cref="UnitPrice"/> are copied at the moment the line is added and
+    /// never re-read, so re-pricing a wash tomorrow leaves today's job alone.
+    /// The id is kept only so the shop can ask what a given service has earned.
+    /// </remarks>
+    public string? ServiceId { get; set; }
+    public Service? Service { get; set; }
 
     /// <summary>Preserves the order the lines were entered in.</summary>
     public int SortOrder { get; set; }
@@ -130,6 +169,13 @@ public class Invoice
 }
 
 /// <summary>One receipt against an invoice — the audit trail behind <c>Invoice.Paid</c>.</summary>
+/// <remarks>
+/// A row here used to mean "money arrived". With online payment it can also mean
+/// "money was asked for and we are waiting" — see <see cref="Status"/>. Only a
+/// Completed payment counts towards <c>Invoice.Paid</c>, which is what stops a
+/// customer who opened the eSewa page and walked away from appearing to have
+/// settled their bill.
+/// </remarks>
 public class Payment
 {
     public int Id { get; set; }
@@ -140,7 +186,51 @@ public class Payment
 
     /// <summary>One of <see cref="Vocabulary.PaymentMethods"/>.</summary>
     public string Method { get; set; } = "Cash";
+
+    /// <summary>
+    /// How the money moved — one of <see cref="Vocabulary.PaymentChannels"/>.
+    /// </summary>
+    /// <remarks>
+    /// Derived from <see cref="Method"/> today, but stored rather than computed
+    /// on read. The question the shop actually asks at the end of the month is
+    /// "how much came in as cash?", and a method list that grows a new wallet
+    /// every year should not silently change the answer for last year.
+    /// </remarks>
+    public string Channel { get; set; } = "cash";
+
+    /// <summary>
+    /// One of <see cref="Vocabulary.PaymentStatuses"/>. Manual payments are
+    /// Completed the moment they are recorded; a gateway payment starts Pending.
+    /// </summary>
+    public string Status { get; set; } = "Completed";
+
+    /// <summary>
+    /// Our own reference, sent to the gateway so its record and ours can be
+    /// matched later. Unique per attempt, not per invoice — a customer whose
+    /// first attempt failed gets a fresh one.
+    /// </summary>
+    public string? Reference { get; set; }
+
+    /// <summary>
+    /// The gateway's own identifier for the transaction, kept for reconciliation
+    /// and for arguing with their support desk. Null until it confirms.
+    /// </summary>
+    public string? ProviderRef { get; set; }
+
+    /// <summary>Why a gateway payment failed, shown to whoever tried it.</summary>
+    public string? FailureReason { get; set; }
+
+    /// <summary>When the attempt started. Equal to <see cref="At"/> for cash.</summary>
+    public DateTime InitiatedAt { get; set; }
+
+    /// <summary>
+    /// When the money was confirmed. For a Pending payment this is the moment it
+    /// was started, and it only means anything once the status moves.
+    /// </summary>
     public DateTime At { get; set; }
+
+    /// <summary>Only a completed payment is money.</summary>
+    public bool IsSettled => Status == "Completed";
 }
 
 /// <summary>An entry in the dashboard's recent-activity feed.</summary>

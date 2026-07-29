@@ -100,6 +100,10 @@ public class CustomersController(GarageFlowDbContext db, ActivityLog activity, T
             Phone = request.Phone.Trim(),
             Email = request.Email.Trim(),
             Address = request.Address.Trim(),
+            // Both or neither: half a coordinate pair is not a location, and
+            // storing one would put a pin on the equator or the prime meridian.
+            Latitude = request.Longitude is null ? null : request.Latitude,
+            Longitude = request.Latitude is null ? null : request.Longitude,
             CreatedAt = DateOnly.FromDateTime(clock.GetLocalNow().DateTime),
             // Cycle the palette so consecutive customers get distinct avatars.
             AvatarColor = Vocabulary.AvatarColors[count % Vocabulary.AvatarColors.Length],
@@ -134,6 +138,21 @@ public class CustomersController(GarageFlowDbContext db, ActivityLog activity, T
         if (request.Email is not null) customer.Email = request.Email.Trim();
         if (request.Address is not null) customer.Address = request.Address.Trim();
         if (request.AvatarColor is not null) customer.AvatarColor = request.AvatarColor;
+
+        // Clearing wins over setting, so a request that somehow asks for both
+        // ends with no pin rather than a silently kept one.
+        if (request.ClearLocation == true)
+        {
+            customer.Latitude = null;
+            customer.Longitude = null;
+        }
+        else if (request.Latitude is { } lat && request.Longitude is { } lng)
+        {
+            // Only moved as a pair. A body carrying one half is ignored rather
+            // than applied, which would drag the existing pin onto a meridian.
+            customer.Latitude = lat;
+            customer.Longitude = lng;
+        }
 
         await db.SaveChangesAsync(ct);
 

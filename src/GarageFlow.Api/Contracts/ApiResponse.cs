@@ -34,6 +34,22 @@ public class ApiResponse<T>
 
     public static ApiResponse<T> Fail(string message, IDictionary<string, string[]>? errors = null) =>
         new() { Data = default, Status = ApiStatus.Failure, Message = message, Errors = errors };
+
+    /// <summary>
+    /// A failure that still carries a payload.
+    /// </summary>
+    /// <remarks>
+    /// For the case where "it did not work" and "here is the current state" are
+    /// both true and both wanted — a payment that has not settled yet, where the
+    /// client needs the attempt's status to decide whether to keep waiting or
+    /// offer another provider.
+    ///
+    /// Named rather than an overload of <see cref="Fail(string, IDictionary{string, string[]})"/>
+    /// because the two would be ambiguous when <typeparamref name="T"/> is
+    /// itself a string.
+    /// </remarks>
+    public static ApiResponse<T> FailWith(T data, string message) =>
+        new() { Data = data, Status = ApiStatus.Failure, Message = message };
 }
 
 /// <summary>Envelope for endpoints with no payload — deletes, mostly.</summary>

@@ -24,6 +24,8 @@ public static class Projections
             Phone = c.Phone,
             Email = c.Email,
             Address = c.Address,
+            Latitude = c.Latitude,
+            Longitude = c.Longitude,
             VehicleCount = c.Vehicles.Count,
             // Lifetime billed, tax included — matches what the invoice list shows.
             TotalSpent = c.Invoices.Sum(i => i.Subtotal + Math.Round(i.Subtotal * i.TaxRate, 2)),
@@ -75,9 +77,28 @@ public static class Projections
                     Qty = l.Qty,
                     UnitPrice = l.UnitPrice,
                     Kind = l.Kind,
+                    ServiceId = l.ServiceId,
                 })
                 .ToList(),
             Total = j.Lines.Sum(l => l.Qty * l.UnitPrice),
+        });
+
+    public static IQueryable<ServiceDto> ToDto(this IQueryable<Service> source) =>
+        source.Select(s => new ServiceDto
+        {
+            Id = s.Id,
+            Name = s.Name,
+            Description = s.Description,
+            Category = s.Category,
+            Price = s.Price,
+            DurationMinutes = s.DurationMinutes,
+            IsActive = s.IsActive,
+            IsBookable = s.IsBookable,
+            VehicleTypes = s.VehicleTypes,
+            // Counted in SQL rather than loaded and grouped. This is what the
+            // Services screen shows instead of a delete button on a row that is
+            // already on somebody's invoice.
+            TimesUsed = s.JobLines.Count,
         });
 
     public static IQueryable<InvoiceDto> ToDto(this IQueryable<Invoice> source) =>

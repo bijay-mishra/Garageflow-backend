@@ -101,6 +101,92 @@ public class InvoicesController(GarageFlowDbContext db, ActivityLog activity, Ti
         return Ok(ApiResponse<InvoiceDto>.Ok(invoice, "Invoice loaded."));
     }
 
+    /// <summary>
+    /// Everything a printed bill needs, in one request.
+    /// </summary>
+    /// <remarks>
+    /// The job card is looked up by id rather than joined: an invoice has no
+    /// foreign key to one, on purpose, so that a bill outlives the work it was
+    /// raised for. A deleted job means no itemised breakdown, not a failed
+    /// print — the invoice's own totals are the financial record either way.
+    /// </remarks>
+    [HttpGet("{id}/print")]
+    [ProducesResponseType<ApiResponse<InvoicePrintDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ApiResponse>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ApiResponse<InvoicePrintDto>>> Print(string id, CancellationToken ct)
+    {
+        var invoice = await db.Invoices.AsNoTracking().Where(i => i.Id == id).ToDto().FirstOrDefaultAsync(ct);
+
+        if (invoice is null)
+            return NotFound(ApiResponse.Failure($"Invoice '{id}' was not found."));
+
+        var customer = await db.Customers.AsNoTracking()
+            .Where(c => c.Id == invoice.CustomerId)
+            .Select(c => new { c.Address, c.Phone, c.Email })
+            .FirstOrDefaultAsync(ct);
+
+        var job = await db.JobCards.AsNoTracking()
+            .Where(j => j.Id == invoice.JobCardId)
+            .Select(j => new
+            {
+                j.Complaint,
+                j.Mechanic,
+                j.Odometer,
+                j.CompletedAt,
+                VehicleLabel = j.Vehicle!.Make + " " + j.Vehicle.Model + " " + j.Vehicle.Year,
+                Lines = j.Lines
+                    .OrderBy(l => l.SortOrder)
+                    .Select(l => new JobLineDto
+                    {
+                        Description = l.Description,
+                        Qty = l.Qty,
+                        UnitPrice = l.UnitPrice,
+                        Kind = l.Kind,
+                        ServiceId = l.ServiceId,
+                    })
+                    .ToList(),
+            })
+            .FirstOrDefaultAsync(ct);
+
+        var payments = await db.Payments.AsNoTracking()
+            .Where(p => p.InvoiceId == id)
+            .OrderBy(p => p.At)
+            // Only money that actually arrived. A Pending attempt on a bill
+            // being printed is not a receipt and must not read as one.
+            .Where(p => p.Status == "Completed")
+            .Select(p => new PaymentDto
+            {
+                Id = p.Id,
+                Amount = p.Amount,
+                Method = p.Method,
+                Channel = p.Channel,
+                Status = p.Status,
+                Reference = p.Reference,
+                ProviderRef = p.ProviderRef,
+                FailureReason = p.FailureReason,
+                At = p.At,
+            })
+            .ToListAsync(ct);
+
+        var document = new InvoicePrintDto
+        {
+            Invoice = invoice,
+            Payments = payments,
+            CustomerAddress = customer?.Address ?? "",
+            CustomerPhone = customer?.Phone ?? "",
+            CustomerEmail = customer?.Email ?? "",
+            VehicleLabel = job?.VehicleLabel ?? "",
+            Odometer = job?.Odometer ?? 0,
+            Complaint = job?.Complaint ?? "",
+            Mechanic = job?.Mechanic ?? "",
+            CompletedAt = job?.CompletedAt,
+            Lines = job?.Lines ?? [],
+            HasJobCard = job is not null,
+        };
+
+        return Ok(ApiResponse<InvoicePrintDto>.Ok(document, $"Invoice {invoice.Id} ready to print."));
+    }
+
     /// <summary>Lists the payments recorded against an invoice, oldest first.</summary>
     [HttpGet("{id}/payments")]
     [ProducesResponseType<ApiResponse<PagedList<PaymentDto>>>(StatusCodes.Status200OK)]
@@ -119,11 +205,59 @@ public class InvoicesController(GarageFlowDbContext db, ActivityLog activity, Ti
                 Id = p.Id,
                 Amount = p.Amount,
                 Method = p.Method,
+                Channel = p.Channel,
+                Status = p.Status,
+                Reference = p.Reference,
+                ProviderRef = p.ProviderRef,
+                FailureReason = p.FailureReason,
                 At = p.At,
             })
             .ToPagedListAsync(query, ct);
 
         return Ok(ApiResponse<PagedList<PaymentDto>>.Ok(page, $"{page.Count} payment(s) found."));
+    }
+
+    /// <summary>
+    /// How much money came in through each channel.
+    /// </summary>
+    /// <remarks>
+    /// The end-of-day question: cash has to be counted in a drawer, online and
+    /// bank have to be reconciled against somebody else's statement, and mixing
+    /// the three is how a shop loses track of what it is owed.
+    ///
+    /// Only Completed payments are counted. Attempts still open are reported
+    /// separately as a count, never as an amount — a customer halfway through
+    /// eSewa has not paid anything.
+    /// </remarks>
+    [HttpGet("collections")]
+    [ProducesResponseType<ApiResponse<CollectionsByChannelDto>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<ApiResponse<CollectionsByChannelDto>>> Collections(
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken ct)
+    {
+        var settled = db.Payments.AsNoTracking().Where(p => p.Status == "Completed");
+
+        if (from is { } start) settled = settled.Where(p => p.At >= start.ToDateTime(TimeOnly.MinValue));
+        if (to is { } end) settled = settled.Where(p => p.At <= end.ToDateTime(TimeOnly.MaxValue));
+
+        // One grouped round trip rather than three sums over the same rows.
+        var byChannel = await settled
+            .GroupBy(p => p.Channel)
+            .Select(g => new { Channel = g.Key, Amount = g.Sum(p => p.Amount) })
+            .ToListAsync(ct);
+
+        decimal Of(string channel) =>
+            byChannel.FirstOrDefault(x => x.Channel == channel)?.Amount ?? 0;
+
+        var summary = new CollectionsByChannelDto
+        {
+            Cash = Of("cash"),
+            Online = Of("online"),
+            Bank = Of("bank"),
+            Total = byChannel.Sum(x => x.Amount),
+            PendingCount = await db.Payments.CountAsync(p => p.Status == "Pending", ct),
+        };
+
+        return Ok(ApiResponse<CollectionsByChannelDto>.Ok(summary, "Collections loaded."));
     }
 
     /// <summary>
@@ -209,6 +343,7 @@ public class InvoicesController(GarageFlowDbContext db, ActivityLog activity, Ti
             return Conflict(ApiResponse.Failure($"Invoice {id} is already paid in full."));
 
         var amount = Math.Min(request.Amount, outstanding);
+        var now = clock.GetLocalNow().DateTime;
 
         invoice.Paid += amount;
         invoice.Method = request.Method;
@@ -216,7 +351,14 @@ public class InvoicesController(GarageFlowDbContext db, ActivityLog activity, Ti
         {
             Amount = amount,
             Method = request.Method,
-            At = clock.GetLocalNow().DateTime,
+            Channel = Vocabulary.ChannelFor(request.Method),
+            // Recorded by a person who has the money in front of them, so it is
+            // settled on arrival — unlike a gateway payment, which starts
+            // Pending and waits for the provider to confirm.
+            Status = "Completed",
+            Reference = string.IsNullOrWhiteSpace(request.Reference) ? null : request.Reference.Trim(),
+            InitiatedAt = now,
+            At = now,
         });
 
         activity.Add($"Payment received on {invoice.Id}", "invoice");

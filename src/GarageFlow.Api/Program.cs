@@ -4,10 +4,12 @@ using GarageFlow.Api.Contracts;
 using GarageFlow.Api.Data;
 using GarageFlow.Api.Domain;
 using GarageFlow.Api.Services;
+using GarageFlow.Api.Services.Payments;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
@@ -26,6 +28,37 @@ builder.Services.AddDbContext<GarageFlowDbContext>(options =>
 // ── Services ─────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<ActivityLog>();
+
+// Mobile apps. NotificationService and CurrentUserService are scoped because
+// they share the request's DbContext — the first so a notification commits in
+// the same transaction as the change it announces, the second so the user row
+// is looked up once per request rather than once per endpoint that needs it.
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<CurrentUserService>();
+builder.Services.AddSingleton<PhotoStorage>();
+
+// Turns catalogue services into priced job lines. Scoped for the same reason as
+// the two above: it works on the request's tracked entities and leaves the
+// SaveChanges to whoever called it.
+builder.Services.AddScoped<JobServiceAppender>();
+
+// Handovers — collection or delivery, the distance fee, and the driver's trail.
+builder.Services.AddScoped<DeliveryService>();
+
+// ── Online payment ───────────────────────────────────────────────────────────
+// Gateways are registered as a set and resolved by name, so adding a third
+// provider is one class and one line here — nothing that already exists has to
+// know about it.
+builder.Services.Configure<PaymentOptions>(builder.Configuration.GetSection(PaymentOptions.SectionName));
+
+// Named clients so each gateway gets its own connection pool and timeout. A
+// wallet that hangs must not exhaust the pool the other one is using.
+builder.Services.AddHttpClient(nameof(EsewaGateway), client => client.Timeout = TimeSpan.FromSeconds(20));
+builder.Services.AddHttpClient(nameof(KhaltiGateway), client => client.Timeout = TimeSpan.FromSeconds(20));
+
+builder.Services.AddScoped<IPaymentGateway, EsewaGateway>();
+builder.Services.AddScoped<IPaymentGateway, KhaltiGateway>();
+builder.Services.AddScoped<PaymentService>();
 
 // ── Authentication ───────────────────────────────────────────────────────────
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
@@ -184,6 +217,26 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors(CorsPolicy);
 
+// Serves the job photos written under wwwroot/uploads. Deliberately before
+// authentication: an <img> tag cannot send a bearer header, so the app could
+// not display a photo it had just been given the URL for. The names are
+// 128 bits of random hex inside a folder named after the job, so a URL is
+// unguessable — but it is a URL, and anyone holding one can open it.
+//
+// The provider is built explicitly rather than left to the default. A fresh
+// clone has no wwwroot, and the host resolves WebRootPath to null when the
+// folder is missing at startup — after which UseStaticFiles() has no root and
+// silently 404s every upload, including the ones written moments earlier.
+var webRoot = app.Environment.WebRootPath
+              ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+
+Directory.CreateDirectory(webRoot);
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(webRoot),
+});
+
 // Order matters: who are you, then what may you do.
 app.UseAuthentication();
 app.UseAuthorization();
@@ -201,6 +254,8 @@ await using (var scope = app.Services.CreateAsyncScope())
     var db = scope.ServiceProvider.GetRequiredService<GarageFlowDbContext>();
     await db.Database.MigrateAsync();
     await DbSeeder.SeedAsync(db);
+    await DbSeeder.SeedServicesAsync(db);
+    await DbSeeder.SeedWorkshopAsync(db);
     await DbSeeder.SeedUsersAsync(db, scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>());
 }
 

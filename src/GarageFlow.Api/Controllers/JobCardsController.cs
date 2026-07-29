@@ -14,7 +14,14 @@ namespace GarageFlow.Api.Controllers;
 [ApiController]
 [Route("api/job-cards")]
 [Produces("application/json")]
-public class JobCardsController(GarageFlowDbContext db, ActivityLog activity, TimeProvider clock) : ControllerBase
+public class JobCardsController(
+    GarageFlowDbContext db,
+    ActivityLog activity,
+    NotificationService notifications,
+    JobServiceAppender serviceLines,
+    DeliveryService deliveries,
+    PhotoStorage photos,
+    TimeProvider clock) : ControllerBase
 {
     /// <summary>Lists job cards, newest first.</summary>
     /// <remarks>
@@ -84,6 +91,9 @@ public class JobCardsController(GarageFlowDbContext db, ActivityLog activity, Ti
         if (vehicle is null)
             return BadRequest(ApiResponse.Failure($"Vehicle '{request.VehicleId}' does not exist."));
 
+        if (await UnknownServiceAsync(request.Lines, ct) is { } unknown)
+            return BadRequest(ApiResponse.Failure(unknown));
+
         var today = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
 
         var job = new JobCard
@@ -150,12 +160,35 @@ public class JobCardsController(GarageFlowDbContext db, ActivityLog activity, Ti
 
         if (request.Complaint is not null) job.Complaint = request.Complaint.Trim();
         if (request.Priority is not null) job.Priority = request.Priority;
-        if (request.Mechanic is not null) job.Mechanic = request.Mechanic.Trim();
         if (request.Odometer is { } odometer) job.Odometer = odometer;
         if (request.PromisedAt is { } promisedAt) job.PromisedAt = promisedAt;
 
+        // Reassignment tells the newly-assigned mechanic they have work — the
+        // mechanic app has no other way to learn about a job it was just given.
+        if (request.Mechanic is not null)
+        {
+            var newMechanic = request.Mechanic.Trim();
+
+            if (!string.Equals(newMechanic, job.Mechanic, StringComparison.Ordinal)
+                && !string.IsNullOrWhiteSpace(newMechanic))
+            {
+                await notifications.NotifyMechanicAsync(
+                    newMechanic,
+                    "New job assigned",
+                    $"Job {job.Id} — due {job.PromisedAt:dd MMM}.",
+                    "job",
+                    job.Id,
+                    ct);
+            }
+
+            job.Mechanic = newMechanic;
+        }
+
         if (request.Lines is not null)
         {
+            if (await UnknownServiceAsync(request.Lines, ct) is { } unknown)
+                return BadRequest(ApiResponse.Failure(unknown));
+
             db.JobLines.RemoveRange(job.Lines);
             job.Lines = ToLines(request.Lines);
         }
@@ -171,6 +204,32 @@ public class JobCardsController(GarageFlowDbContext db, ActivityLog activity, Ti
                 job.CompletedAt ??= DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
 
             activity.Add($"{job.Id} marked {job.Status}", "job");
+
+            // The customer app shows this as a push-style alert, so a status
+            // change made from the dashboard has to reach it too — otherwise the
+            // customer only hears about work the mechanic touched.
+            var owner = await db.Vehicles.AsNoTracking()
+                .Where(v => v.Id == job.VehicleId)
+                .Select(v => new { v.CustomerId, v.Plate })
+                .FirstOrDefaultAsync(ct);
+
+            if (owner is not null)
+            {
+                await notifications.NotifyCustomerAsync(
+                    owner.CustomerId,
+                    $"Your vehicle is now {job.Status}",
+                    $"{owner.Plate} — job {job.Id}.",
+                    "job",
+                    job.Id,
+                    ct);
+            }
+
+            // Finishing the work is the moment the customer has a decision to
+            // make: come and get it, or have it brought round. Opening the
+            // handover here means they are asked once, automatically, rather
+            // than when somebody at the desk remembers to ring them.
+            if (job.Status == "Completed")
+                await deliveries.OpenAsync(job, ct);
         }
 
         await db.SaveChangesAsync(ct);
@@ -180,6 +239,59 @@ public class JobCardsController(GarageFlowDbContext db, ActivityLog activity, Ti
         return Ok(ApiResponse<JobCardDto>.Ok(
             dto,
             statusChanged ? $"Job card {job.Id} marked {job.Status}." : $"Job card {job.Id} updated successfully."));
+    }
+
+    /// <summary>
+    /// Adds services from the price list to a job card — "and give it a wash
+    /// while it is in".
+    /// </summary>
+    /// <remarks>
+    /// Only ever appends. <c>PUT /api/job-cards/{id}</c> replaces the entire line
+    /// set, so a client holding a stale copy would wipe whatever the mechanic
+    /// added from the app five minutes ago; this cannot. Services already on the
+    /// job are skipped rather than duplicated, and the response says which.
+    ///
+    /// Prices come from the catalogue. Edit the line afterwards to discount it —
+    /// the line is the record of what was charged, not the price list.
+    /// </remarks>
+    [HttpPost("{id}/services")]
+    [ProducesResponseType<ApiResponse<JobCardDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ApiResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiResponse>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ApiResponse<JobCardDto>>> AddServices(
+        string id, AddJobServicesRequest request, CancellationToken ct)
+    {
+        var job = await db.JobCards.Include(j => j.Lines).FirstOrDefaultAsync(j => j.Id == id, ct);
+
+        if (job is null)
+            return NotFound(ApiResponse.Failure($"Job card '{id}' was not found."));
+
+        var result = await serviceLines.AppendAsync(job, request.ServiceIds, ct: ct);
+
+        if (result.Error is not null)
+            return BadRequest(ApiResponse.Failure(result.Error));
+
+        if (result.Added.Count == 0)
+        {
+            return BadRequest(ApiResponse.Failure(
+                $"Job {job.Id} already has {string.Join(", ", result.AlreadyOn)}."));
+        }
+
+        activity.Add(
+            $"{string.Join(", ", result.Added.Select(l => l.Description))} added to job {job.Id}",
+            "job");
+
+        await db.SaveChangesAsync(ct);
+
+        var dto = await db.JobCards.AsNoTracking().Where(j => j.Id == id).ToDto().FirstAsync(ct);
+
+        var skipped = result.AlreadyOn.Count == 0
+            ? ""
+            : $" {string.Join(", ", result.AlreadyOn)} was already on it.";
+
+        return Ok(ApiResponse<JobCardDto>.Ok(
+            dto,
+            $"{result.Added.Count} service(s) added to {job.Id}.{skipped}"));
     }
 
     /// <summary>Deletes a job card and its lines.</summary>
@@ -193,9 +305,13 @@ public class JobCardsController(GarageFlowDbContext db, ActivityLog activity, Ti
         if (job is null)
             return NotFound(ApiResponse.Failure($"Job card '{id}' was not found."));
 
-        db.JobCards.Remove(job); // lines cascade
+        db.JobCards.Remove(job); // lines and photo rows cascade
         activity.Add($"Job {job.Id} deleted", "job");
         await db.SaveChangesAsync(ct);
+
+        // The rows cascade, the files do not — without this the photos would sit
+        // on disk forever with nothing left in the database pointing at them.
+        photos.DeleteJobFolder(job.Id);
 
         return Ok(ApiResponse.Success($"Job card {job.Id} deleted successfully."));
     }
@@ -207,6 +323,36 @@ public class JobCardsController(GarageFlowDbContext db, ActivityLog activity, Ti
             Qty = l.Qty,
             UnitPrice = l.UnitPrice,
             Kind = l.Kind,
+            // Carried through as sent. The client picked the description and
+            // price off the catalogue; keeping the id lets the shop report on
+            // what each service earned, without stopping anyone editing the row.
+            ServiceId = string.IsNullOrWhiteSpace(l.ServiceId) ? null : l.ServiceId.Trim(),
             SortOrder = index,
         }).ToList();
+
+    /// <summary>
+    /// Null when every <c>serviceId</c> on the request exists, else the message
+    /// to return.
+    /// </summary>
+    /// <remarks>
+    /// Checked up front rather than left to the foreign key: a constraint
+    /// violation surfaces as a 500 with a SQL Server message in it, and the
+    /// client cannot tell the user which line is wrong.
+    /// </remarks>
+    private async Task<string?> UnknownServiceAsync(
+        IEnumerable<JobLineRequest> lines, CancellationToken ct)
+    {
+        var ids = lines
+            .Select(l => l.ServiceId?.Trim())
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct()
+            .ToList();
+
+        if (ids.Count == 0) return null;
+
+        var known = await db.Services.Where(s => ids.Contains(s.Id)).Select(s => s.Id).ToListAsync(ct);
+        var missing = ids.Except(known).FirstOrDefault();
+
+        return missing is null ? null : $"Service '{missing}' does not exist.";
+    }
 }
