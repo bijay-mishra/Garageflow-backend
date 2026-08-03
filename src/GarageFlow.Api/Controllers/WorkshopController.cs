@@ -24,7 +24,9 @@ namespace GarageFlow.Api.Controllers;
 [Produces("application/json")]
 public class WorkshopController(
     GarageFlowDbContext db,
-    CurrentUserService currentUser,
+    // The tenant, not the signed-in user's stored row: during impersonation the
+    // two disagree, and the row is the operator's.
+    TenantContext tenant,
     PaymentService payments,
     ActivityLog activity,
     TimeProvider clock) : ControllerBase
@@ -35,6 +37,8 @@ public class WorkshopController(
     public async Task<ActionResult<ApiResponse<WorkshopDto>>> Get(CancellationToken ct)
     {
         var workshop = await LoadAsync(ct);
+
+        if (workshop is null) return NoWorkshop();
 
         return Ok(ApiResponse<WorkshopDto>.Ok(ToDto(workshop), "Workshop loaded."));
     }
@@ -48,6 +52,8 @@ public class WorkshopController(
         UpdateWorkshopRequest request, CancellationToken ct)
     {
         var workshop = await LoadAsync(ct);
+
+        if (workshop is null) return NoWorkshop();
 
         if (request.Name is not null) workshop.Name = request.Name.Trim();
         if (request.LegalName is not null) workshop.LegalName = request.LegalName.Trim();
@@ -71,6 +77,14 @@ public class WorkshopController(
             workshop.Longitude = lng;
         }
 
+        if (request.BankName is not null) workshop.BankName = request.BankName.Trim();
+        if (request.BankAccountName is not null) workshop.BankAccountName = request.BankAccountName.Trim();
+        if (request.BankAccountNumber is not null) workshop.BankAccountNumber = request.BankAccountNumber.Trim();
+        if (request.BankBranch is not null) workshop.BankBranch = request.BankBranch.Trim();
+
+        if (request.About is not null) workshop.About = request.About.Trim();
+        if (request.IsListed is { } listed) workshop.IsListed = listed;
+
         if (request.DeliveryEnabled is { } enabled) workshop.DeliveryEnabled = enabled;
         if (request.DeliveryBaseFee is { } baseFee) workshop.DeliveryBaseFee = baseFee;
         if (request.DeliveryPerKm is { } perKm) workshop.DeliveryPerKm = perKm;
@@ -86,18 +100,38 @@ public class WorkshopController(
     }
 
     /// <summary>
-    /// The caller's workshop row, created on first read.
+    /// The caller's workshop row, created on first read, or null if the caller
+    /// belongs to no company.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Created rather than 404'd because every tenant has a workshop by
     /// definition — the row is just a place to put its details, and demanding a
     /// setup step before the dashboard will load would be ceremony. A fresh
     /// tenant gets blanks and fills them in on the settings screen.
+    /// </para>
+    /// <para>
+    /// Every tenant, though — and not everyone signed in is one. A superadmin
+    /// carries an empty company code, and a customer who has joined no garage
+    /// carries one too. This used to mint them a <c>Workshop</c> with a blank
+    /// code, which then appeared in the operator console as a nameless company
+    /// that could not be opened (there is no <c>/companies/</c> route) and so
+    /// could not be deleted either. A company you cannot name is not a company;
+    /// the honest answer here is that there is nothing to load.
+    /// </para>
     /// </remarks>
-    private async Task<Workshop> LoadAsync(CancellationToken ct)
+    private async Task<Workshop?> LoadAsync(CancellationToken ct)
     {
-        var user = await currentUser.GetAsync(User, ct);
-        var code = user?.CompanyCode ?? DbSeeder.DemoCompanyCode;
+        // From the token rather than the caller's stored User row. The two
+        // disagree during an impersonated session: the id in the token is the
+        // operator's, whose own row carries no company, so a database lookup
+        // answered for nobody — and used to *create* a blank-coded workshop to
+        // answer with, which is where the nameless company in the console came
+        // from. The token's company is what every tenant-filtered query on this
+        // request is already scoped to.
+        var code = tenant.CompanyCode ?? DbSeeder.DemoCompanyCode;
+
+        if (string.IsNullOrWhiteSpace(code)) return null;
 
         var workshop = await db.Workshops.FirstOrDefaultAsync(w => w.CompanyCode == code, ct);
 
@@ -106,6 +140,7 @@ public class WorkshopController(
         workshop = new Workshop
         {
             CompanyCode = code,
+            CreatedAt = clock.GetUtcNow().UtcDateTime,
             UpdatedAt = clock.GetUtcNow().UtcDateTime,
         };
 
@@ -114,6 +149,10 @@ public class WorkshopController(
 
         return workshop;
     }
+
+    /// <summary>The answer when the caller belongs to no company.</summary>
+    private ActionResult NoWorkshop() =>
+        NotFound(ApiResponse.Failure("Your account is not attached to a workshop."));
 
     private WorkshopDto ToDto(Workshop w) => new()
     {
@@ -127,6 +166,13 @@ public class WorkshopController(
         Longitude = w.Longitude,
         OpeningHours = w.OpeningHours,
         InvoiceFooter = w.InvoiceFooter,
+        About = w.About,
+        IsListed = w.IsListed,
+        BankName = w.BankName,
+        BankAccountName = w.BankAccountName,
+        BankAccountNumber = w.BankAccountNumber,
+        BankBranch = w.BankBranch,
+        CanBankTransfer = w.CanBankTransfer,
         CanDeliver = w.CanDeliver,
         DeliveryEnabled = w.DeliveryEnabled,
         DeliveryBaseFee = w.DeliveryBaseFee,

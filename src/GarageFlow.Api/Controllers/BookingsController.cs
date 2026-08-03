@@ -44,8 +44,15 @@ public class BookingsController(
 
         // The scoping is applied here, not left to a query parameter, so there
         // is no way for a customer to widen it.
-        var customerId = await currentUser.CustomerIdAsync(User, ct);
-        if (customerId is not null)
+        var scope = await currentUser.CustomerScopeAsync(User, ct);
+
+        if (scope.SeesNothing)
+        {
+            return Ok(ApiResponse<PagedList<BookingDto>>.Ok(
+                new PagedList<BookingDto>([], 0), "Join a garage to book a service."));
+        }
+
+        if (scope.CustomerId is { } customerId)
             bookings = bookings.Where(b => b.CustomerId == customerId);
 
         if (!string.IsNullOrWhiteSpace(status))
@@ -81,11 +88,12 @@ public class BookingsController(
     {
         var bookings = db.Bookings.AsNoTracking().Where(b => b.Id == id);
 
-        var customerId = await currentUser.CustomerIdAsync(User, ct);
-        if (customerId is not null)
+        var scope = await currentUser.CustomerScopeAsync(User, ct);
+
+        if (scope.CustomerId is { } customerId)
             bookings = bookings.Where(b => b.CustomerId == customerId);
 
-        var booking = await bookings.ToDto().FirstOrDefaultAsync(ct);
+        var booking = scope.SeesNothing ? null : await bookings.ToDto().FirstOrDefaultAsync(ct);
 
         if (booking is null)
             return NotFound(ApiResponse.Failure($"Booking '{id}' was not found."));
@@ -103,8 +111,14 @@ public class BookingsController(
     {
         var customerId = await currentUser.CustomerIdAsync(User, ct);
 
+        // Null here means a customer account with no record in this garage. It
+        // must not fall through: a booking written with a blank customer id would
+        // be a row nobody owns, sitting in a real workshop's diary.
         if (customerId is null)
-            return Forbid();
+        {
+            return BadRequest(ApiResponse.Failure(
+                "Join a garage before booking a service."));
+        }
 
         // The vehicle must be one of theirs. Without this a customer could book
         // against any plate in the workshop by guessing an id.
@@ -138,7 +152,7 @@ public class BookingsController(
 
         var booking = new Booking
         {
-            Id = Ids.Next(await db.Bookings.Select(b => b.Id).ToListAsync(ct), "BKG"),
+            Id = Ids.Next(await db.Bookings.IgnoreQueryFilters().Select(b => b.Id).ToListAsync(ct), "BKG"),
             CustomerId = customerId,
             VehicleId = vehicle.Id,
             Complaint = request.Complaint.Trim(),
@@ -254,7 +268,7 @@ public class BookingsController(
 
         var job = new JobCard
         {
-            Id = Ids.Next(await db.JobCards.Select(j => j.Id).ToListAsync(ct), "JOB"),
+            Id = Ids.Next(await db.JobCards.IgnoreQueryFilters().Select(j => j.Id).ToListAsync(ct), "JOB"),
             VehicleId = booking.VehicleId,
             Complaint = booking.Complaint,
             Status = "Open",
@@ -319,11 +333,14 @@ public class BookingsController(
     {
         var bookings = db.Bookings.Where(b => b.Id == id);
 
-        var customerId = await currentUser.CustomerIdAsync(User, ct);
-        if (customerId is not null)
+        var scope = await currentUser.CustomerScopeAsync(User, ct);
+
+        if (scope.CustomerId is { } customerId)
             bookings = bookings.Where(b => b.CustomerId == customerId);
 
-        var booking = await bookings.FirstOrDefaultAsync(ct);
+        // A customer with no garage owns nothing to cancel. Checked before the
+        // query rather than after, so an unscoped read never happens at all.
+        var booking = scope.SeesNothing ? null : await bookings.FirstOrDefaultAsync(ct);
 
         if (booking is null)
             return NotFound(ApiResponse.Failure($"Booking '{id}' was not found."));

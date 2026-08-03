@@ -87,7 +87,7 @@ public class VehiclesController(GarageFlowDbContext db, ActivityLog activity) : 
 
         var vehicle = new Vehicle
         {
-            Id = Ids.Next(await db.Vehicles.Select(v => v.Id).ToListAsync(ct), "VEH"),
+            Id = Ids.Next(await db.Vehicles.IgnoreQueryFilters().Select(v => v.Id).ToListAsync(ct), "VEH"),
             CustomerId = request.CustomerId,
             Make = request.Make.Trim(),
             Model = request.Model.Trim(),

@@ -4,3 +4,7 @@ obj/
 .vs/
 .vscode/
 appsettings.*.local.json
+
+# The API console, when it is started in the background. Holds the reset codes
+# that SMTP would otherwise have emailed — never commit it.
+logs/

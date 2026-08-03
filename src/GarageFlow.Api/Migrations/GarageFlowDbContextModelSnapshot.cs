@@ -31,6 +31,11 @@ namespace GarageFlow.Api.Migrations
                     b.Property<DateTime>("At")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -45,6 +50,8 @@ namespace GarageFlow.Api.Migrations
 
                     b.HasIndex("At");
 
+                    b.HasIndex("CompanyCode");
+
                     b.ToTable("Activities", (string)null);
                 });
 
@@ -53,6 +60,11 @@ namespace GarageFlow.Api.Migrations
                     b.Property<string>("Id")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<string>("Complaint")
                         .IsRequired()
@@ -98,6 +110,8 @@ namespace GarageFlow.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyCode");
+
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("JobCardId");
@@ -141,6 +155,92 @@ namespace GarageFlow.Api.Migrations
                     b.ToTable("BookingServices", (string)null);
                 });
 
+            modelBuilder.Entity("GarageFlow.Api.Domain.Branch", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyCode", "IsActive");
+
+                    b.ToTable("Branches", (string)null);
+                });
+
+            modelBuilder.Entity("GarageFlow.Api.Domain.CompanyRole", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BaseRole")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("IsBuiltIn")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyCode");
+
+                    b.HasIndex("CompanyCode", "Name")
+                        .IsUnique();
+
+                    b.ToTable("CompanyRoles", (string)null);
+                });
+
             modelBuilder.Entity("GarageFlow.Api.Domain.Customer", b =>
                 {
                     b.Property<string>("Id")
@@ -153,6 +253,11 @@ namespace GarageFlow.Api.Migrations
                         .HasColumnType("nvarchar(300)");
 
                     b.Property<string>("AvatarColor")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("CompanyCode")
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
@@ -182,6 +287,8 @@ namespace GarageFlow.Api.Migrations
                         .HasColumnType("nvarchar(40)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CompanyCode");
 
                     b.HasIndex("Name");
 
@@ -253,6 +360,11 @@ namespace GarageFlow.Api.Migrations
                     b.Property<DateTime?>("ChosenAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("datetime2");
 
@@ -311,6 +423,8 @@ namespace GarageFlow.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyCode");
+
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("JobCardId")
@@ -353,11 +467,94 @@ namespace GarageFlow.Api.Migrations
                     b.ToTable("DeliveryPoints", (string)null);
                 });
 
+            modelBuilder.Entity("GarageFlow.Api.Domain.FiscalYearRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly>("End")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsClosed")
+                        .HasColumnType("bit");
+
+                    b.Property<DateOnly>("Start")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyCode");
+
+                    b.HasIndex("CompanyCode", "Code")
+                        .IsUnique();
+
+                    b.ToTable("FiscalYears", (string)null);
+                });
+
+            modelBuilder.Entity("GarageFlow.Api.Domain.ImpersonationLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyCode", "At");
+
+                    b.ToTable("ImpersonationLogs", (string)null);
+                });
+
             modelBuilder.Entity("GarageFlow.Api.Domain.Invoice", b =>
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<string>("CustomerId")
                         .IsRequired()
@@ -400,6 +597,8 @@ namespace GarageFlow.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyCode");
+
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("IssuedAt");
@@ -412,6 +611,11 @@ namespace GarageFlow.Api.Migrations
                     b.Property<string>("Id")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<string>("Complaint")
                         .IsRequired()
@@ -452,6 +656,8 @@ namespace GarageFlow.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyCode");
+
                     b.HasIndex("CreatedAt");
 
                     b.HasIndex("Status");
@@ -468,6 +674,11 @@ namespace GarageFlow.Api.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -500,6 +711,8 @@ namespace GarageFlow.Api.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CompanyCode");
 
                     b.HasIndex("JobCardId");
 
@@ -564,6 +777,64 @@ namespace GarageFlow.Api.Migrations
                     b.ToTable("JobPhotos", (string)null);
                 });
 
+            modelBuilder.Entity("GarageFlow.Api.Domain.MenuItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("LabelNe")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("Module")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("ParentKey")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Route")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("MenuItems", (string)null);
+                });
+
             modelBuilder.Entity("GarageFlow.Api.Domain.Notification", b =>
                 {
                     b.Property<int>("Id")
@@ -576,6 +847,11 @@ namespace GarageFlow.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(600)
                         .HasColumnType("nvarchar(600)");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -604,6 +880,8 @@ namespace GarageFlow.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyCode");
+
                     b.HasIndex("UserId", "ReadAt");
 
                     b.ToTable("Notifications", (string)null);
@@ -628,6 +906,11 @@ namespace GarageFlow.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<string>("FailureReason")
                         .HasMaxLength(300)
@@ -660,6 +943,8 @@ namespace GarageFlow.Api.Migrations
                         .HasColumnType("nvarchar(20)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CompanyCode");
 
                     b.HasIndex("InvoiceId");
 
@@ -708,6 +993,42 @@ namespace GarageFlow.Api.Migrations
                     b.ToTable("RefreshTokens", (string)null);
                 });
 
+            modelBuilder.Entity("GarageFlow.Api.Domain.RoleMenu", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("CanView")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("MenuKey")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyCode");
+
+                    b.HasIndex("CompanyCode", "Role", "MenuKey")
+                        .IsUnique();
+
+                    b.ToTable("RoleMenus", (string)null);
+                });
+
             modelBuilder.Entity("GarageFlow.Api.Domain.Service", b =>
                 {
                     b.Property<string>("Id")
@@ -715,6 +1036,11 @@ namespace GarageFlow.Api.Migrations
                         .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("CompanyCode")
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
@@ -754,6 +1080,8 @@ namespace GarageFlow.Api.Migrations
 
                     b.HasIndex("Category");
 
+                    b.HasIndex("CompanyCode");
+
                     b.HasIndex("IsActive", "IsBookable");
 
                     b.ToTable("Services", (string)null);
@@ -765,8 +1093,16 @@ namespace GarageFlow.Api.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("BranchId")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("CompanyCode")
                         .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("CompanyRoleName")
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
@@ -781,6 +1117,10 @@ namespace GarageFlow.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(160)
                         .HasColumnType("nvarchar(160)");
+
+                    b.Property<string>("FiscalYear")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("FullName")
                         .IsRequired()
@@ -797,21 +1137,34 @@ namespace GarageFlow.Api.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("nvarchar(120)");
 
+                    b.Property<bool>("MustSetPassword")
+                        .HasColumnType("bit");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasMaxLength(400)
                         .HasColumnType("nvarchar(400)");
 
+                    b.Property<int>("PasswordResetAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PasswordResetCodeHash")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<DateTime?>("PasswordResetExpiresAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("PasswordResetTokenHash")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                    b.Property<DateTime?>("PasswordResetSentAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Phone")
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("PhotoPath")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -835,6 +1188,45 @@ namespace GarageFlow.Api.Migrations
                     b.ToTable("Users", (string)null);
                 });
 
+            modelBuilder.Entity("GarageFlow.Api.Domain.UserWorkshopLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("CustomerId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("JoinedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("UserId", "CompanyCode")
+                        .IsUnique();
+
+                    b.ToTable("UserWorkshopLinks", (string)null);
+                });
+
             modelBuilder.Entity("GarageFlow.Api.Domain.Vehicle", b =>
                 {
                     b.Property<string>("Id")
@@ -842,6 +1234,11 @@ namespace GarageFlow.Api.Migrations
                         .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("CompanyCode")
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
@@ -889,6 +1286,8 @@ namespace GarageFlow.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyCode");
+
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("Plate");
@@ -902,10 +1301,38 @@ namespace GarageFlow.Api.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
+                    b.Property<string>("About")
+                        .IsRequired()
+                        .HasMaxLength(600)
+                        .HasColumnType("nvarchar(600)");
+
                     b.Property<string>("Address")
                         .IsRequired()
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("BankAccountName")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<string>("BankAccountNumber")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("BankBranch")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<decimal>("DeliveryBaseFee")
                         .HasPrecision(18, 2)
@@ -930,10 +1357,20 @@ namespace GarageFlow.Api.Migrations
                         .HasMaxLength(160)
                         .HasColumnType("nvarchar(160)");
 
+                    b.Property<string>("EnabledModules")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("InvoiceFooter")
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsListed")
+                        .HasColumnType("bit");
 
                     b.Property<double?>("Latitude")
                         .HasColumnType("float");
@@ -970,6 +1407,8 @@ namespace GarageFlow.Api.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("CompanyCode");
+
+                    b.HasIndex("IsListed");
 
                     b.ToTable("Workshops", (string)null);
                 });
@@ -1154,6 +1593,25 @@ namespace GarageFlow.Api.Migrations
                     b.Navigation("Customer");
                 });
 
+            modelBuilder.Entity("GarageFlow.Api.Domain.UserWorkshopLink", b =>
+                {
+                    b.HasOne("GarageFlow.Api.Domain.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GarageFlow.Api.Domain.User", "User")
+                        .WithMany("WorkshopLinks")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("GarageFlow.Api.Domain.Vehicle", b =>
                 {
                     b.HasOne("GarageFlow.Api.Domain.Customer", "Customer")
@@ -1202,6 +1660,8 @@ namespace GarageFlow.Api.Migrations
             modelBuilder.Entity("GarageFlow.Api.Domain.User", b =>
                 {
                     b.Navigation("RefreshTokens");
+
+                    b.Navigation("WorkshopLinks");
                 });
 
             modelBuilder.Entity("GarageFlow.Api.Domain.Vehicle", b =>

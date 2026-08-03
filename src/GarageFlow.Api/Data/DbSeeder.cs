@@ -67,6 +67,38 @@ public static class DbSeeder
     }
 
     /// <summary>
+    /// Seeds the workshop's branches.
+    /// </summary>
+    /// <remarks>
+    /// One branch, not four. The dashboard's <c>src/data/seed.ts</c> shipped a
+    /// hardcoded list — Main, Chabahil, Lalitpur, Pokhara — compiled into the
+    /// bundle, so every install of the product claimed to have a Pokhara branch
+    /// it did not have. A workshop starts with the one site it is standing in
+    /// and adds more when it opens more.
+    ///
+    /// Gated on its own table so a database created before branches existed
+    /// still gets one, and the topbar has something to select.
+    /// </remarks>
+    public static async Task SeedBranchesAsync(GarageFlowDbContext db, CancellationToken ct = default)
+    {
+        if (await db.Branches.AnyAsync(b => b.CompanyCode == DemoCompanyCode, ct)) return;
+
+        db.Branches.Add(new Branch
+        {
+            Id = "BR-001",
+            CompanyCode = DemoCompanyCode,
+            Name = "Main Branch",
+            Address = "Ring Road, Kalanki, Kathmandu",
+            Phone = "+977 1-5234567",
+            IsDefault = true,
+            IsActive = true,
+            CreatedAt = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+        });
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
     /// Seeds the workshop's price list — washing, detailing and the other extras
     /// a job card can carry on top of parts and labour.
     /// </summary>
@@ -430,4 +462,42 @@ public static class DbSeeder
 
     private static Activity New(string id, string at, string text, string kind) =>
         new() { Id = id, At = DateTime.Parse(at), Text = text, Kind = kind };
+    /// <summary>
+    /// The platform operator.
+    /// </summary>
+    /// <remarks>
+    /// Belongs to no company, which is what lets it sign in without a code and
+    /// what makes the tenant filter show it nothing of its own. Seeded rather
+    /// than created through the console for the obvious reason: something has to
+    /// exist before anyone can log in and create anything.
+    ///
+    /// The password is the demo one. Change it before this is reachable from
+    /// anywhere but a laptop.
+    /// </remarks>
+    public static async Task SeedSuperAdminAsync(
+        GarageFlowDbContext db,
+        IPasswordHasher<User> hasher,
+        CancellationToken ct = default)
+    {
+        if (await db.Users.AnyAsync(u => u.Role == Vocabulary.SuperAdminRole, ct)) return;
+
+        var ids = await db.Users.Select(u => u.Id).ToListAsync(ct);
+
+        var superAdmin = new User
+        {
+            Id = Ids.Next(ids, "USR"),
+            CompanyCode = "",
+            Email = DemoEmail,
+            FullName = "Bijay Mishra",
+            Role = Vocabulary.SuperAdminRole,
+            Workshop = "GarageFlow",
+            IsActive = true,
+            CreatedAt = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+        };
+
+        superAdmin.PasswordHash = hasher.HashPassword(superAdmin, DemoPassword);
+
+        db.Users.Add(superAdmin);
+        await db.SaveChangesAsync(ct);
+    }
 }

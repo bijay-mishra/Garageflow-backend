@@ -1,3 +1,5 @@
+using System.Net;
+using System.Text.RegularExpressions;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Options;
@@ -56,11 +58,14 @@ public class EmailSender(IOptions<EmailOptions> options, ILogger<EmailSender> lo
     {
         if (!_options.IsConfigured)
         {
+            // Tags stripped. The body is HTML built for a mail client, and a
+            // six-digit code buried in a <p style="…"> is a code nobody can
+            // read off a console — which is the whole point of this fallback.
             logger.LogWarning(
                 "SMTP password not set — email NOT sent. To deliver it, run from src/GarageFlow.Api:\n"
                 + "    dotnet user-secrets set \"Email:Password\" \"<your gmail app password>\"\n"
                 + "To: {To}\nSubject: {Subject}\n{Body}",
-                toAddress, subject, htmlBody);
+                toAddress, subject, PlainText(htmlBody));
             return;
         }
 
@@ -95,5 +100,27 @@ public class EmailSender(IOptions<EmailOptions> options, ILogger<EmailSender> lo
             // either way.
             logger.LogError(ex, "Failed to send email to {To}", toAddress);
         }
+    }
+
+    /// <summary>
+    /// The mail as a console can show it: tags dropped, entities undone, blank
+    /// lines collapsed.
+    /// </summary>
+    /// <remarks>
+    /// Only ever used for the unconfigured fallback, so it does not have to be
+    /// a real HTML parser — it has to make a six-digit code findable by eye.
+    /// </remarks>
+    private static string PlainText(string html)
+    {
+        var text = Regex.Replace(html, "<(br|/p|/div|/h[1-6])[^>]*>", "\n", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, "<[^>]+>", "");
+        text = WebUtility.HtmlDecode(text);
+
+        var lines = text
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0);
+
+        return string.Join('\n', lines);
     }
 }

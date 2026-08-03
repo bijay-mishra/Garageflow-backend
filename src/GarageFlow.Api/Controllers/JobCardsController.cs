@@ -21,6 +21,7 @@ public class JobCardsController(
     JobServiceAppender serviceLines,
     DeliveryService deliveries,
     PhotoStorage photos,
+    WorkspaceService workspace,
     TimeProvider clock) : ControllerBase
 {
     /// <summary>Lists job cards, newest first.</summary>
@@ -35,6 +36,12 @@ public class JobCardsController(
         [FromQuery] TableQuery query, [FromQuery] string? status, CancellationToken ct)
     {
         var jobs = db.JobCards.AsNoTracking().AsQueryable();
+
+        // The accounting year the topbar is set to. Applied before anything
+        // else, so the count on the pager is the count within the year rather
+        // than a total the table then contradicts.
+        if (await workspace.StaffYearAsync(User, ct) is { } year)
+            jobs = jobs.Where(j => j.CreatedAt >= year.Start && j.CreatedAt <= year.End);
 
         if (!string.IsNullOrWhiteSpace(status))
             jobs = jobs.Where(j => j.Status == status);
@@ -98,7 +105,7 @@ public class JobCardsController(
 
         var job = new JobCard
         {
-            Id = Ids.Next(await db.JobCards.Select(j => j.Id).ToListAsync(ct), "JOB", pad: 4),
+            Id = Ids.Next(await db.JobCards.IgnoreQueryFilters().Select(j => j.Id).ToListAsync(ct), "JOB", pad: 4),
             VehicleId = request.VehicleId,
             Complaint = request.Complaint.Trim(),
             Status = request.Status,

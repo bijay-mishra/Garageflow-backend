@@ -117,7 +117,7 @@ public class DeliveryService(
 
         var delivery = new Delivery
         {
-            Id = Ids.Next(await db.Deliveries.Select(d => d.Id).ToListAsync(ct), "DEL"),
+            Id = Ids.Next(await db.Deliveries.IgnoreQueryFilters().Select(d => d.Id).ToListAsync(ct), "DEL"),
             JobCardId = job.Id,
             CustomerId = vehicle.CustomerId,
             Method = "Pickup",

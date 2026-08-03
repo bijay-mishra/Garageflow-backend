@@ -54,7 +54,12 @@ public class ServicesController(
 
         // Applied first and unconditionally: a customer must never see a retired
         // price or an internal-only extra, whatever they put in the query string.
-        var isCustomer = await currentUser.CustomerIdAsync(User, ct) is not null;
+        //
+        // Keyed on the role rather than on having a customer record, so somebody
+        // who has signed up but joined no garage is still treated as a customer
+        // here — the price list is the one thing they can reasonably look at
+        // before joining, and they should see the public version of it.
+        var isCustomer = !(await currentUser.CustomerScopeAsync(User, ct)).IsStaff;
 
         if (isCustomer)
             services = services.Where(s => s.IsActive && s.IsBookable);
@@ -132,7 +137,7 @@ public class ServicesController(
 
         var service = new Service
         {
-            Id = Ids.Next(await db.Services.Select(s => s.Id).ToListAsync(ct), "SVC"),
+            Id = Ids.Next(await db.Services.IgnoreQueryFilters().Select(s => s.Id).ToListAsync(ct), "SVC"),
             Name = name,
             Description = request.Description.Trim(),
             Category = request.Category,

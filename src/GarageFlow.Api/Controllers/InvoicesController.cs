@@ -14,7 +14,11 @@ namespace GarageFlow.Api.Controllers;
 [ApiController]
 [Route("api/invoices")]
 [Produces("application/json")]
-public class InvoicesController(GarageFlowDbContext db, ActivityLog activity, TimeProvider clock) : ControllerBase
+public class InvoicesController(
+    GarageFlowDbContext db,
+    ActivityLog activity,
+    WorkspaceService workspace,
+    TimeProvider clock) : ControllerBase
 {
     /// <summary>Lists invoices, newest first.</summary>
     /// <remarks>
@@ -28,6 +32,11 @@ public class InvoicesController(GarageFlowDbContext db, ActivityLog activity, Ti
         [FromQuery] TableQuery query, [FromQuery] string? status, CancellationToken ct)
     {
         var invoices = db.Invoices.AsNoTracking().AsQueryable();
+
+        // Bills belong to the year they were issued in — the one number on this
+        // screen an accountant would be asked to reconcile.
+        if (await workspace.StaffYearAsync(User, ct) is { } year)
+            invoices = invoices.Where(i => i.IssuedAt >= year.Start && i.IssuedAt <= year.End);
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
@@ -65,7 +74,15 @@ public class InvoicesController(GarageFlowDbContext db, ActivityLog activity, Ti
     [ProducesResponseType<ApiResponse<InvoiceSummaryDto>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<ApiResponse<InvoiceSummaryDto>>> Summary(CancellationToken ct)
     {
-        var totals = await db.Invoices.AsNoTracking()
+        var invoices = db.Invoices.AsNoTracking().AsQueryable();
+
+        // The same window as the table below these cards. Without it the totals
+        // would describe all time while the rows describe one year, and the two
+        // would visibly disagree on the same screen.
+        if (await workspace.StaffYearAsync(User, ct) is { } year)
+            invoices = invoices.Where(i => i.IssuedAt >= year.Start && i.IssuedAt <= year.End);
+
+        var totals = await invoices
             .GroupBy(_ => 1)
             .Select(g => new
             {
@@ -236,6 +253,16 @@ public class InvoicesController(GarageFlowDbContext db, ActivityLog activity, Ti
     {
         var settled = db.Payments.AsNoTracking().Where(p => p.Status == "Completed");
 
+        // The accounting year bounds the window; an explicit from/to narrows it
+        // further. A caller cannot widen past the selected year by passing dates
+        // outside it, which is the point of applying this first.
+        if (await workspace.StaffYearAsync(User, ct) is { } year)
+        {
+            settled = settled.Where(p =>
+                p.At >= year.Start.ToDateTime(TimeOnly.MinValue) &&
+                p.At <= year.End.ToDateTime(TimeOnly.MaxValue));
+        }
+
         if (from is { } start) settled = settled.Where(p => p.At >= start.ToDateTime(TimeOnly.MinValue));
         if (to is { } end) settled = settled.Where(p => p.At <= end.ToDateTime(TimeOnly.MaxValue));
 
@@ -287,7 +314,7 @@ public class InvoicesController(GarageFlowDbContext db, ActivityLog activity, Ti
 
         var invoice = new Invoice
         {
-            Id = Ids.Next(await db.Invoices.Select(i => i.Id).ToListAsync(ct), "INV", pad: 4),
+            Id = Ids.Next(await db.Invoices.IgnoreQueryFilters().Select(i => i.Id).ToListAsync(ct), "INV", pad: 4),
             JobCardId = request.JobCardId,
             CustomerId = customer.Id,
             CustomerName = customer.Name,

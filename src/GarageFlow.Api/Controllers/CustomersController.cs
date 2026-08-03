@@ -90,7 +90,12 @@ public class CustomersController(GarageFlowDbContext db, ActivityLog activity, T
     public async Task<ActionResult<ApiResponse<CustomerDto>>> Create(
         CreateCustomerRequest request, CancellationToken ct)
     {
-        var existingIds = await db.Customers.Select(c => c.Id).ToListAsync(ct);
+        var existingIds = await db.Customers
+            // Unfiltered: ids are unique across every company, so a second
+            // company must not start again at CUS-001.
+            .IgnoreQueryFilters()
+            .Select(c => c.Id)
+            .ToListAsync(ct);
         var count = existingIds.Count;
 
         var customer = new Customer

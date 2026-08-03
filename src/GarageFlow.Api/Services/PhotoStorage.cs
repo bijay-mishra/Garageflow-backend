@@ -71,6 +71,34 @@ public class PhotoStorage(IWebHostEnvironment environment, ILogger<PhotoStorage>
         return $"{UploadsFolder}/{jobCardId}/{name}";
     }
 
+    /// <summary>Folder holding profile photos, under wwwroot.</summary>
+    public const string AvatarsFolder = "avatars";
+
+    /// <summary>
+    /// Saves a profile photo and returns the path relative to wwwroot.
+    /// </summary>
+    /// <remarks>
+    /// One file per user, and the previous one is deleted by the caller. Named
+    /// from the user id plus a random suffix rather than the id alone: the id
+    /// alone would be a stable, guessable URL that stays valid after the photo
+    /// is replaced, so a cached copy could outlive the change. The suffix makes
+    /// each upload its own URL, which also means no cache-busting query string.
+    /// </remarks>
+    public async Task<string> SaveAvatarAsync(
+        IFormFile file, string userId, CancellationToken ct = default)
+    {
+        var extension = AllowedTypes[file.ContentType];
+        var name = $"{userId}-{Guid.NewGuid():N}{extension}";
+
+        var absoluteDirectory = Path.Combine(WebRoot, AvatarsFolder);
+        Directory.CreateDirectory(absoluteDirectory);
+
+        await using (var stream = File.Create(Path.Combine(absoluteDirectory, name)))
+            await file.CopyToAsync(stream, ct);
+
+        return $"{AvatarsFolder}/{name}";
+    }
+
     /// <summary>
     /// Deletes a stored file. A missing file is not an error — the row is going
     /// away either way, and a half-deleted photo should not block the request.

@@ -244,7 +244,15 @@ public record UserDto
     public required string Id { get; init; }
     public required string Email { get; init; }
     public required string Name { get; init; }
+    /// <summary>The product role this account is authorised as.</summary>
     public required string Role { get; init; }
+
+    /// <summary>
+    /// The workshop's own name for that role — "CEO", "Front desk" — or null
+    /// when they use the product's name for it.
+    /// </summary>
+    public required string? CompanyRoleName { get; init; }
+
     public required string? Phone { get; init; }
     public required bool IsActive { get; init; }
 
@@ -273,6 +281,18 @@ public class CreateUserRequest
     [AllowedValues("Owner", "Manager", "Advisor", "Mechanic", "Customer")]
     public string Role { get; set; } = "Mechanic";
 
+    /// <summary>
+    /// One of the company's own roles, from Role setup. Optional.
+    /// </summary>
+    /// <remarks>
+    /// When given it decides <see cref="Role"/> rather than sitting beside it —
+    /// the role's base is what the account is authorised as, so the two can
+    /// never disagree. Left out, the account gets the product role named above,
+    /// which is what every account had before companies could name their own.
+    /// </remarks>
+    [StringLength(40)]
+    public string? CompanyRoleName { get; set; }
+
     [StringLength(40)]
     public string? Phone { get; set; }
 
@@ -292,6 +312,12 @@ public class UpdateUserRequest
 
     [AllowedValues(null, "Owner", "Manager", "Advisor", "Mechanic", "Customer")]
     public string? Role { get; set; }
+
+    /// <summary>
+    /// One of the company's own roles. Decides <see cref="Role"/> when given.
+    /// Send an empty string to put the account back on a plain product role.
+    /// </summary>
+    [StringLength(40)] public string? CompanyRoleName { get; set; }
 
     [StringLength(120)] public string? MechanicName { get; set; }
     [StringLength(20)] public string? CustomerId { get; set; }

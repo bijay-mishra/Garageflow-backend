@@ -47,8 +47,16 @@ public class DeliveriesController(
     {
         var rows = db.Deliveries.AsNoTracking().AsQueryable();
 
-        var customerId = await currentUser.CustomerIdAsync(User, ct);
-        if (customerId is not null) rows = rows.Where(d => d.CustomerId == customerId);
+        var scope = await currentUser.CustomerScopeAsync(User, ct);
+
+        if (scope.SeesNothing)
+        {
+            return Ok(ApiResponse<PagedList<DeliveryDto>>.Ok(
+                new PagedList<DeliveryDto>([], 0), "Join a garage to see your handovers."));
+        }
+
+        if (scope.CustomerId is { } customerId)
+            rows = rows.Where(d => d.CustomerId == customerId);
 
         if (!string.IsNullOrWhiteSpace(status))
             rows = rows.Where(d => d.Status == status);
@@ -310,8 +318,14 @@ public class DeliveriesController(
         var rows = tracked ? db.Deliveries : db.Deliveries.AsNoTracking();
         var query = rows.Where(d => d.Id == id);
 
-        var customerId = await currentUser.CustomerIdAsync(User, ct);
-        if (customerId is not null) query = query.Where(d => d.CustomerId == customerId);
+        var scope = await currentUser.CustomerScopeAsync(User, ct);
+
+        // A customer belonging to no garage owns no handover, so every id is a
+        // miss. Returning null here is what turns into the 404 the caller sees.
+        if (scope.SeesNothing) return null;
+
+        if (scope.CustomerId is { } customerId)
+            query = query.Where(d => d.CustomerId == customerId);
 
         return await query.FirstOrDefaultAsync(ct);
     }
@@ -320,8 +334,12 @@ public class DeliveriesController(
     {
         var query = db.Deliveries.AsNoTracking().Where(d => d.Id == id);
 
-        var customerId = await currentUser.CustomerIdAsync(User, ct);
-        if (customerId is not null) query = query.Where(d => d.CustomerId == customerId);
+        var scope = await currentUser.CustomerScopeAsync(User, ct);
+
+        if (scope.SeesNothing) return null;
+
+        if (scope.CustomerId is { } customerId)
+            query = query.Where(d => d.CustomerId == customerId);
 
         return await ToDto(query).FirstOrDefaultAsync(ct);
     }

@@ -360,6 +360,13 @@ public class DeliveryPingRequest
 
 public class UpdateWorkshopRequest
 {
+    // Bank details, for a customer paying by transfer. Each is optional and
+    // absent means "leave it alone", matching every other field here.
+    [StringLength(120)] public string? BankName { get; set; }
+    [StringLength(160)] public string? BankAccountName { get; set; }
+    [StringLength(60)] public string? BankAccountNumber { get; set; }
+    [StringLength(120)] public string? BankBranch { get; set; }
+
     [StringLength(160)] public string? Name { get; set; }
     [StringLength(200)] public string? LegalName { get; set; }
     [StringLength(300)] public string? Address { get; set; }
@@ -368,6 +375,15 @@ public class UpdateWorkshopRequest
     [StringLength(40)] public string? TaxNumber { get; set; }
     [StringLength(200)] public string? OpeningHours { get; set; }
     [StringLength(500)] public string? InvoiceFooter { get; set; }
+
+    /// <summary>Shown on the garage's card in the public directory.</summary>
+    [StringLength(600)] public string? About { get; set; }
+
+    /// <summary>
+    /// Whether customers browsing the app can find and join this garage.
+    /// Off by default — being listed is a choice the workshop makes.
+    /// </summary>
+    public bool? IsListed { get; set; }
 
     [Range(-90, 90, ErrorMessage = "Latitude must be between -90 and 90.")]
     public double? Latitude { get; set; }
@@ -437,4 +453,18 @@ public class TableQuery
 
     /// <summary>Effective page size, or null for "everything".</summary>
     public int? EffectiveTake => Take ?? PageSize;
+}
+
+/// <summary>A customer reporting that they have transferred the money.</summary>
+public class DeclareBankTransferRequest
+{
+    [Required, StringLength(20)]
+    public string InvoiceId { get; set; } = "";
+
+    /// <summary>
+    /// The bank's own reference, if the customer has it to hand. Optional —
+    /// most people will not, and demanding it would stop them telling us at all.
+    /// </summary>
+    [StringLength(80)]
+    public string? Reference { get; set; }
 }

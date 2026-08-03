@@ -15,8 +15,14 @@ namespace GarageFlow.Api.Domain;
 /// missing is the list: without one, every advisor types "wash" at whatever
 /// price they remember, and nobody can answer "what do we charge for a wash?"
 /// </remarks>
-public class Service
+public class Service : ITenantOwned
 {
+    /// <summary>The company that owns this row.</summary>
+    /// <remarks>
+    /// Set automatically on save from the request's token, and enforced by a
+    /// global query filter — no controller reads or writes it directly.
+    /// </remarks>
+    public string CompanyCode { get; set; } = default!;
     public string Id { get; set; } = default!;
 
     public string Name { get; set; } = default!;

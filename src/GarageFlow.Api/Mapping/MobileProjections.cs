@@ -188,6 +188,7 @@ public static class MobileProjections
             Email = u.Email,
             Name = u.FullName,
             Role = u.Role,
+            CompanyRoleName = u.CompanyRoleName,
             Phone = u.Phone,
             IsActive = u.IsActive,
             MechanicName = u.MechanicName,

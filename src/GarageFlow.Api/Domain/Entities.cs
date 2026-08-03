@@ -1,8 +1,14 @@
 namespace GarageFlow.Api.Domain;
 
 /// <summary>A workshop customer. Ids look like <c>CUS-001</c>.</summary>
-public class Customer
+public class Customer : ITenantOwned
 {
+    /// <summary>The company that owns this row.</summary>
+    /// <remarks>
+    /// Set automatically on save from the request's token, and enforced by a
+    /// global query filter — no controller reads or writes it directly.
+    /// </remarks>
+    public string CompanyCode { get; set; } = default!;
     public string Id { get; set; } = default!;
     public string Name { get; set; } = default!;
     public string Phone { get; set; } = "";
@@ -41,8 +47,14 @@ public class Customer
 }
 
 /// <summary>A vehicle belonging to a customer. Ids look like <c>VEH-001</c>.</summary>
-public class Vehicle
+public class Vehicle : ITenantOwned
 {
+    /// <summary>The company that owns this row.</summary>
+    /// <remarks>
+    /// Set automatically on save from the request's token, and enforced by a
+    /// global query filter — no controller reads or writes it directly.
+    /// </remarks>
+    public string CompanyCode { get; set; } = default!;
     public string Id { get; set; } = default!;
     public string CustomerId { get; set; } = default!;
     public Customer? Customer { get; set; }
@@ -70,8 +82,14 @@ public class Vehicle
 }
 
 /// <summary>A repair order. Ids look like <c>JOB-1042</c>.</summary>
-public class JobCard
+public class JobCard : ITenantOwned
 {
+    /// <summary>The company that owns this row.</summary>
+    /// <remarks>
+    /// Set automatically on save from the request's token, and enforced by a
+    /// global query filter — no controller reads or writes it directly.
+    /// </remarks>
+    public string CompanyCode { get; set; } = default!;
     public string Id { get; set; } = default!;
     public string VehicleId { get; set; } = default!;
     public Vehicle? Vehicle { get; set; }
@@ -103,8 +121,14 @@ public class JobCard
 }
 
 /// <summary>A single labour or parts line on a job card.</summary>
-public class JobLine
+public class JobLine : ITenantOwned
 {
+    /// <summary>The company that owns this row.</summary>
+    /// <remarks>
+    /// Set automatically on save from the request's token, and enforced by a
+    /// global query filter — no controller reads or writes it directly.
+    /// </remarks>
+    public string CompanyCode { get; set; } = default!;
     public int Id { get; set; }
     public string JobCardId { get; set; } = default!;
     public JobCard? JobCard { get; set; }
@@ -136,8 +160,14 @@ public class JobLine
 }
 
 /// <summary>A bill raised against a job card. Ids look like <c>INV-2091</c>.</summary>
-public class Invoice
+public class Invoice : ITenantOwned
 {
+    /// <summary>The company that owns this row.</summary>
+    /// <remarks>
+    /// Set automatically on save from the request's token, and enforced by a
+    /// global query filter — no controller reads or writes it directly.
+    /// </remarks>
+    public string CompanyCode { get; set; } = default!;
     public string Id { get; set; } = default!;
     public string JobCardId { get; set; } = default!;
     public string CustomerId { get; set; } = default!;
@@ -176,8 +206,14 @@ public class Invoice
 /// customer who opened the eSewa page and walked away from appearing to have
 /// settled their bill.
 /// </remarks>
-public class Payment
+public class Payment : ITenantOwned
 {
+    /// <summary>The company that owns this row.</summary>
+    /// <remarks>
+    /// Set automatically on save from the request's token, and enforced by a
+    /// global query filter — no controller reads or writes it directly.
+    /// </remarks>
+    public string CompanyCode { get; set; } = default!;
     public int Id { get; set; }
     public string InvoiceId { get; set; } = default!;
     public Invoice? Invoice { get; set; }
@@ -234,8 +270,14 @@ public class Payment
 }
 
 /// <summary>An entry in the dashboard's recent-activity feed.</summary>
-public class Activity
+public class Activity : ITenantOwned
 {
+    /// <summary>The company that owns this row.</summary>
+    /// <remarks>
+    /// Set automatically on save from the request's token, and enforced by a
+    /// global query filter — no controller reads or writes it directly.
+    /// </remarks>
+    public string CompanyCode { get; set; } = default!;
     public string Id { get; set; } = default!;
     public DateTime At { get; set; }
     public string Text { get; set; } = "";

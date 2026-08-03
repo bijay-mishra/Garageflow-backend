@@ -34,7 +34,12 @@ public class CustomerPortalController(
         [FromQuery] TableQuery query, CancellationToken ct)
     {
         var customerId = await currentUser.CustomerIdAsync(User, ct);
-        if (customerId is null) return Forbid();
+
+        if (customerId is null)
+        {
+            return Ok(ApiResponse<PagedList<VehicleDto>>.Ok(
+                new PagedList<VehicleDto>([], 0), NoGarage));
+        }
 
         var page = await db.Vehicles.AsNoTracking()
             .Where(v => v.CustomerId == customerId)
@@ -63,7 +68,12 @@ public class CustomerPortalController(
         CancellationToken ct = default)
     {
         var customerId = await currentUser.CustomerIdAsync(User, ct);
-        if (customerId is null) return Forbid();
+
+        if (customerId is null)
+        {
+            return Ok(ApiResponse<PagedList<CustomerJobDto>>.Ok(
+                new PagedList<CustomerJobDto>([], 0), NoGarage));
+        }
 
         var jobs = db.JobCards.AsNoTracking()
             .Where(j => j.Vehicle!.CustomerId == customerId);
@@ -95,7 +105,9 @@ public class CustomerPortalController(
     public async Task<ActionResult<ApiResponse<CustomerJobDto>>> Job(string id, CancellationToken ct)
     {
         var customerId = await currentUser.CustomerIdAsync(User, ct);
-        if (customerId is null) return Forbid();
+
+        if (customerId is null)
+            return NotFound(ApiResponse.Failure($"Job '{id}' was not found on your account."));
 
         var job = await db.JobCards.AsNoTracking()
             .Where(j => j.Id == id && j.Vehicle!.CustomerId == customerId)
@@ -120,7 +132,12 @@ public class CustomerPortalController(
         CancellationToken ct)
     {
         var customerId = await currentUser.CustomerIdAsync(User, ct);
-        if (customerId is null) return Forbid();
+
+        if (customerId is null)
+        {
+            return Ok(ApiResponse<PagedList<CustomerJobDto>>.Ok(
+                new PagedList<CustomerJobDto>([], 0), NoGarage));
+        }
 
         var jobs = db.JobCards.AsNoTracking()
             .Where(j => j.Vehicle!.CustomerId == customerId
@@ -148,7 +165,12 @@ public class CustomerPortalController(
         [FromQuery] TableQuery query, CancellationToken ct)
     {
         var customerId = await currentUser.CustomerIdAsync(User, ct);
-        if (customerId is null) return Forbid();
+
+        if (customerId is null)
+        {
+            return Ok(ApiResponse<PagedList<InvoiceDto>>.Ok(
+                new PagedList<InvoiceDto>([], 0), NoGarage));
+        }
 
         var page = await db.Invoices.AsNoTracking()
             .Where(i => i.CustomerId == customerId)
@@ -164,4 +186,16 @@ public class CustomerPortalController(
 
     /// <summary>Origin photo URLs are built from — see JobPhotosController.</summary>
     private string BaseUrl => $"{Request.Scheme}://{Request.Host}";
+
+    /// <summary>
+    /// What a signed-up customer sees before they have joined a garage.
+    /// </summary>
+    /// <remarks>
+    /// These endpoints used to answer that case with <c>Forbid()</c> — a bare 403
+    /// the app rendered as "You do not have permission to do that", which is both
+    /// alarming and wrong: they have every permission, there is simply no garage
+    /// to look at yet. An empty list with a sentence that names the next action is
+    /// the truthful answer, and it is one the app can show as-is.
+    /// </remarks>
+    private const string NoGarage = "Join a garage to see your vehicles and bills.";
 }

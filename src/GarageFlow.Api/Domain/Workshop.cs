@@ -37,6 +37,20 @@ public class Workshop
     public string TaxNumber { get; set; } = "";
 
     /// <summary>
+    /// Whether this garage appears in the public directory customers browse.
+    /// </summary>
+    /// <remarks>
+    /// Opt-in, and off by default for a reason: a workshop that bought this to
+    /// run its own books has not agreed to be listed anywhere, and quietly
+    /// publishing its name and address the day the directory ships would be a
+    /// decision made on its behalf. The Workshop screen turns it on.
+    /// </remarks>
+    public bool IsListed { get; set; }
+
+    /// <summary>A sentence or two shown on the garage's public card.</summary>
+    public string About { get; set; } = "";
+
+    /// <summary>
     /// Where the workshop is, so a customer can get directions from the app.
     /// Null until somebody drops a pin.
     /// </summary>
@@ -58,6 +72,58 @@ public class Workshop
     /// shown to a customer, not used to compute anything.
     /// </remarks>
     public string OpeningHours { get; set; } = "";
+
+    // ── Subscription ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Modules this company may use, comma separated.
+    /// </summary>
+    /// <remarks>
+    /// Set by the superadmin and read by the dashboard to decide which menu
+    /// entries exist. It lives here rather than in the browser because the
+    /// previous version was a localStorage value the customer could edit to
+    /// unlock anything — a gate anyone can open is decoration.
+    /// </remarks>
+    public string EnabledModules { get; set; } = "";
+
+    /// <summary>
+    /// False suspends the company: nobody there can sign in.
+    /// </summary>
+    /// <remarks>
+    /// Their data is untouched. Suspension is for non-payment or a dispute,
+    /// and both are situations you want to be able to undo.
+    /// </remarks>
+    public bool IsActive { get; set; } = true;
+
+    /// <summary>When the superadmin created it.</summary>
+    public DateTime CreatedAt { get; set; }
+
+    // ── Bank transfer ────────────────────────────────────────────────────────
+    // Shown to a customer who wants to pay by transfer rather than a wallet.
+    //
+    // Not a gateway and deliberately not pretending to be one: the app displays
+    // these details, the customer moves the money in their own banking app, and
+    // a staff member confirms it against the statement. There is no API in that
+    // loop and no fee, which is exactly why plenty of Nepali workshops prefer
+    // it for larger bills.
+    //
+    // Blank means the workshop has not set it up, and the app hides the option
+    // rather than showing an empty account number.
+
+    public string BankName { get; set; } = "";
+
+    /// <summary>The name on the account — what the payer must match.</summary>
+    public string BankAccountName { get; set; } = "";
+
+    public string BankAccountNumber { get; set; } = "";
+
+    /// <summary>Optional. Some banks want it, most transfers do not.</summary>
+    public string BankBranch { get; set; } = "";
+
+    /// <summary>True once there is enough here to actually pay into.</summary>
+    public bool CanBankTransfer =>
+        !string.IsNullOrWhiteSpace(BankName) &&
+        !string.IsNullOrWhiteSpace(BankAccountNumber);
 
     // ── Home delivery ────────────────────────────────────────────────────────
     // What the shop charges to bring a finished vehicle back. Priced from the

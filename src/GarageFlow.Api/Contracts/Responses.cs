@@ -293,12 +293,27 @@ public record WorkshopDto
     public required string OpeningHours { get; init; }
     public required string InvoiceFooter { get; init; }
 
+    /// <summary>Shown on the garage's card in the customer app's directory.</summary>
+    public required string About { get; init; }
+
+    /// <summary>Whether customers can find and join this garage. Off by default.</summary>
+    public required bool IsListed { get; init; }
+
     // ── Home delivery ────────────────────────────────────────────────────────
 
     /// <summary>
     /// Whether delivery can actually be offered — the flag *and* a workshop pin,
     /// since the fee is priced from the distance between two points.
     /// </summary>
+    /// <summary>Bank details for a customer paying by transfer. Blank when unset.</summary>
+    public required string BankName { get; init; }
+    public required string BankAccountName { get; init; }
+    public required string BankAccountNumber { get; init; }
+    public required string BankBranch { get; init; }
+
+    /// <summary>True when there is enough on file to actually pay into.</summary>
+    public required bool CanBankTransfer { get; init; }
+
     public required bool CanDeliver { get; init; }
 
     public required bool DeliveryEnabled { get; init; }

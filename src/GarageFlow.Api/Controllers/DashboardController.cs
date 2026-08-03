@@ -3,6 +3,7 @@ using GarageFlow.Api.Contracts;
 using GarageFlow.Api.Data;
 using GarageFlow.Api.Domain;
 using GarageFlow.Api.Mapping;
+using GarageFlow.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +15,10 @@ namespace GarageFlow.Api.Controllers;
 [ApiController]
 [Route("api/dashboard")]
 [Produces("application/json")]
-public class DashboardController(GarageFlowDbContext db, TimeProvider clock) : ControllerBase
+public class DashboardController(
+    GarageFlowDbContext db,
+    WorkspaceService workspace,
+    TimeProvider clock) : ControllerBase
 {
     private const int TrendMonths = 6;
     private const int ActivityFeedSize = 6;
@@ -38,7 +42,23 @@ public class DashboardController(GarageFlowDbContext db, TimeProvider clock) : C
         var prevMonthStart = monthStart.AddMonths(-1);
         var trendStart = monthStart.AddMonths(-(TrendMonths - 1));
 
+        // Every figure below is bounded by the accounting year in the topbar.
+        //
+        // A consequence worth naming: viewing a closed year reports "revenue
+        // today" as zero, because nothing was collected today *within that
+        // year*. That is literally true rather than a bug, and the client is
+        // told which year is selected (`isCurrentYear` on /api/workspace) so it
+        // can say so on the cards instead of leaving a bare zero to be misread.
+        var year = await workspace.StaffYearAsync(User, ct);
+
         var payments = db.Payments.AsNoTracking();
+
+        if (year is not null)
+        {
+            payments = payments.Where(p =>
+                p.At >= year.Start.ToDateTime(TimeOnly.MinValue) &&
+                p.At <= year.End.ToDateTime(TimeOnly.MaxValue));
+        }
 
         // Half-open [start, end) ranges over the raw timestamp keep these
         // sargable — no per-row date conversion for SQL Server to work around.
@@ -53,6 +73,9 @@ public class DashboardController(GarageFlowDbContext db, TimeProvider clock) : C
             : Math.Round((revenueThisMonth - revenueLastMonth) / revenueLastMonth * 100m, 1);
 
         var jobs = db.JobCards.AsNoTracking();
+
+        if (year is not null)
+            jobs = jobs.Where(j => j.CreatedAt >= year.Start && j.CreatedAt <= year.End);
 
         var openJobs = await jobs.CountAsync(j => Vocabulary.OpenJobStatuses.Contains(j.Status), ct);
 
@@ -72,7 +95,12 @@ public class DashboardController(GarageFlowDbContext db, TimeProvider clock) : C
 
         var activeCustomers = await db.Customers.CountAsync(ct);
 
-        var unpaidTotal = await db.Invoices.AsNoTracking()
+        var invoices = db.Invoices.AsNoTracking();
+
+        if (year is not null)
+            invoices = invoices.Where(i => i.IssuedAt >= year.Start && i.IssuedAt <= year.End);
+
+        var unpaidTotal = await invoices
             .Select(i => i.Subtotal + Math.Round(i.Subtotal * i.TaxRate, 2) - i.Paid)
             .Where(outstanding => outstanding > 0)
             .SumAsync(outstanding => (decimal?)outstanding, ct) ?? 0m;

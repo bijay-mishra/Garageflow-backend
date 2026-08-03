@@ -94,10 +94,75 @@ public static class Vocabulary
     /// a Mechanic sees the jobs assigned to them, a Customer sees only their own
     /// vehicles, jobs and bookings.
     /// </remarks>
-    public static readonly string[] UserRoles = ["Owner", "Manager", "Advisor", "Mechanic", "Customer"];
+    public static readonly string[] UserRoles =
+        ["SuperAdmin", "Owner", "Manager", "Advisor", "Mechanic", "Customer"];
+
+    /// <summary>
+    /// The operator of the whole product, above every company.
+    /// </summary>
+    /// <remarks>
+    /// Belongs to no company — <c>CompanyCode</c> is empty — which is why it
+    /// signs in without one and why the tenant filter would show it nothing.
+    /// It reaches a company by minting a token scoped to that company, not by
+    /// bypassing the filter with its own session. Every such handover is
+    /// recorded; see ImpersonationLog.
+    ///
+    /// Deliberately absent from <see cref="StaffRoles"/>: it is not workshop
+    /// staff and must not fall through a "staff can do this" check.
+    /// </remarks>
+    public const string SuperAdminRole = "SuperAdmin";
 
     /// <summary>Roles that may open the web dashboard.</summary>
     public static readonly string[] StaffRoles = ["Owner", "Manager", "Advisor"];
+
+    /// <summary>
+    /// Roles whose menu a company can configure.
+    /// </summary>
+    /// <remarks>
+    /// Mechanics are included though they live in the phone app: they can sign
+    /// into the dashboard, and a workshop that wants to stop them reading the
+    /// takings should be able to say so in one place rather than two.
+    ///
+    /// Customer and SuperAdmin are absent, and not by oversight. Customers never
+    /// see this menu — theirs is the app's. The superadmin's console is not a
+    /// workshop's to configure.
+    /// </remarks>
+    public static readonly string[] MenuRoles = ["Owner", "Manager", "Advisor", "Mechanic"];
+
+    /// <summary>
+    /// Everything the superadmin can switch on or off per company.
+    /// </summary>
+    /// <remarks>
+    /// The names match the dashboard's route paths, so a company's enabled
+    /// list maps straight onto which menu entries appear and which pages
+    /// answer. Stored per company on <c>Workshop.EnabledModules</c>.
+    ///
+    /// Job cards, customers and vehicles are not here on purpose — they are
+    /// the product, not an add-on, and a workshop with them switched off has
+    /// bought nothing.
+    /// </remarks>
+    public static readonly string[] Modules =
+    [
+        "services",
+        "billing",
+        "deliveries",
+        "reports",
+        "staff",
+        "serviceHistory",
+        "multiBranch",
+        "fiscalYear",
+        "onlineBooking",
+        "onlinePayment",
+    ];
+
+    /// <summary>What a company gets when it is created.</summary>
+    /// <remarks>
+    /// The everyday ones. The rest are things a workshop asks for, so they
+    /// start off and the superadmin turns them on — rather than everything
+    /// being on and somebody having to notice what to remove.
+    /// </remarks>
+    public static readonly string[] DefaultModules =
+        ["services", "billing", "reports", "serviceHistory", "staff"];
 
     public const string MechanicRole = "Mechanic";
     public const string CustomerRole = "Customer";

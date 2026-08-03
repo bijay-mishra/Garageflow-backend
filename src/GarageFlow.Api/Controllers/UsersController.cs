@@ -30,6 +30,7 @@ public class UsersController(
     GarageFlowDbContext db,
     IPasswordHasher<User> passwordHasher,
     CurrentUserService currentUser,
+    RoleService roles,
     TimeProvider clock) : ControllerBase
 {
     /// <summary>Lists accounts in the caller's workshop.</summary>
@@ -103,10 +104,18 @@ public class UsersController(
         if (await db.Users.AnyAsync(u => u.CompanyCode == me.CompanyCode && u.Email == email, ct))
             return BadRequest(ApiResponse.Failure($"An account with the email {email} already exists."));
 
-        if (Validate(request.Role, request.MechanicName, request.CustomerId) is { } problem)
+        // A company role decides the product role rather than sitting beside it,
+        // so the two can never disagree about what this account may do.
+        var (companyRole, role) = await ResolveRoleAsync(
+            me.CompanyCode, request.CompanyRoleName, request.Role, ct);
+
+        if (role is null)
+            return BadRequest(ApiResponse.Failure($"'{request.CompanyRoleName}' is not a role at this workshop."));
+
+        if (Validate(role, request.MechanicName, request.CustomerId) is { } problem)
             return BadRequest(ApiResponse.Failure(problem));
 
-        if (request.Role == Vocabulary.CustomerRole)
+        if (role == Vocabulary.CustomerRole)
         {
             var exists = await db.Customers.AnyAsync(c => c.Id == request.CustomerId, ct);
             if (!exists)
@@ -120,13 +129,19 @@ public class UsersController(
             Email = email,
             FullName = request.Name.Trim(),
             Phone = request.Phone?.Trim(),
-            Role = request.Role,
+            Role = role,
+            CompanyRoleName = companyRole,
             Workshop = me.Workshop,
             IsActive = true,
             CreatedAt = clock.GetUtcNow().UtcDateTime,
-            MechanicName = request.Role == Vocabulary.MechanicRole ? request.MechanicName!.Trim() : null,
-            CustomerId = request.Role == Vocabulary.CustomerRole ? request.CustomerId : null,
+            MechanicName = role == Vocabulary.MechanicRole ? request.MechanicName!.Trim() : null,
+            CustomerId = role == Vocabulary.CustomerRole ? request.CustomerId : null,
             PasswordHash = string.Empty,
+
+            // Somebody else typed this password, so it is a handover credential
+            // rather than a secret. The account replaces it at first sign-in and
+            // the person who created it stops knowing it.
+            MustSetPassword = true,
         };
 
         // Hashed after construction: the hasher salts per user, so it needs the
@@ -168,7 +183,21 @@ public class UsersController(
         if (user.Id == me.Id && request.Role is not null && request.Role != user.Role)
             return BadRequest(ApiResponse.Failure("You cannot change your own role."));
 
-        var role = request.Role ?? user.Role;
+        // Left out entirely, the account keeps whatever it has. Sent empty, it
+        // goes back to a plain product role — the two need telling apart, so
+        // this is one of the few places a null and an empty string differ.
+        var requestedCompanyRole = request.CompanyRoleName ?? user.CompanyRoleName;
+
+        var (companyRole, resolved) = await ResolveRoleAsync(
+            user.CompanyCode, requestedCompanyRole, request.Role ?? user.Role, ct);
+
+        if (resolved is null)
+            return BadRequest(ApiResponse.Failure($"'{requestedCompanyRole}' is not a role at this workshop."));
+
+        if (user.Id == me.Id && resolved != user.Role)
+            return BadRequest(ApiResponse.Failure("You cannot change your own role."));
+
+        var role = resolved;
         var mechanicName = request.MechanicName ?? user.MechanicName;
         var customerId = request.CustomerId ?? user.CustomerId;
 
@@ -186,6 +215,7 @@ public class UsersController(
         if (request.IsActive is { } active) user.IsActive = active;
 
         user.Role = role;
+        user.CompanyRoleName = companyRole;
 
         // The two links are mutually exclusive, and changing role has to clear
         // the one that no longer applies — a former mechanic keeping their name
@@ -196,6 +226,13 @@ public class UsersController(
         if (!string.IsNullOrWhiteSpace(request.Password))
         {
             user.PasswordHash = passwordHasher.HashPassword(user, request.Password);
+
+            // A reset puts the account back in the handover state, for the same
+            // reason it started there: whoever typed this knows it. Even when
+            // that is the account holder resetting their own — the owner doing
+            // it for them is the case worth defending against, and telling the
+            // two apart here would mean trusting who claims to be asking.
+            user.MustSetPassword = true;
 
             // A password reset by staff ends every session that account has open,
             // which is the point of resetting it.
@@ -248,6 +285,37 @@ public class UsersController(
     /// Checks that a role has the link it needs. Returns the problem, or null
     /// when the combination is coherent.
     /// </summary>
+    /// <summary>
+    /// Turns a requested role into the pair actually stored: the company's name
+    /// for it, and the product role the server authorises as.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A company role wins over the product role in the same request — its base
+    /// <i>is</i> the product role, so honouring both would let a caller ask to
+    /// be "Front desk" with Owner permissions.
+    /// </para>
+    /// <para>
+    /// Returns a null role when the name is not one of this company's, which
+    /// the caller turns into a 400. Silently falling back would create an
+    /// account in a role nobody chose.
+    /// </para>
+    /// </remarks>
+    private async Task<(string? CompanyRole, string? Role)> ResolveRoleAsync(
+        string companyCode, string? companyRoleName, string productRole, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(companyRoleName)) return (null, productRole);
+
+        var name = companyRoleName.Trim();
+        var baseRole = await roles.BaseRoleOfAsync(companyCode, name, ct);
+
+        if (baseRole is null) return (null, null);
+
+        // A company role whose name matches a product role is that role; storing
+        // the name as well would be a duplicate the staff list has to reconcile.
+        return (Vocabulary.MenuRoles.Contains(name) ? null : name, baseRole);
+    }
+
     private static string? Validate(string role, string? mechanicName, string? customerId) => role switch
     {
         Vocabulary.MechanicRole when string.IsNullOrWhiteSpace(mechanicName) =>

@@ -57,8 +57,14 @@ public class CustomerRegistration
 /// life: its own status, its own fee, its own driver, and a trail of positions
 /// that has nothing to do with the repair.
 /// </remarks>
-public class Delivery
+public class Delivery : ITenantOwned
 {
+    /// <summary>The company that owns this row.</summary>
+    /// <remarks>
+    /// Set automatically on save from the request's token, and enforced by a
+    /// global query filter — no controller reads or writes it directly.
+    /// </remarks>
+    public string CompanyCode { get; set; } = default!;
     public string Id { get; set; } = default!;
 
     public string JobCardId { get; set; } = default!;

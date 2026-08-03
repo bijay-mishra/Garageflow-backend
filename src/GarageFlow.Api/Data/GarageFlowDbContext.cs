@@ -1,9 +1,26 @@
 using GarageFlow.Api.Domain;
+using GarageFlow.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace GarageFlow.Api.Data;
 
-public class GarageFlowDbContext(DbContextOptions<GarageFlowDbContext> options) : DbContext(options)
+/// <summary>
+/// The database, scoped to one company.
+/// </summary>
+/// <remarks>
+/// Every entity implementing <see cref="ITenantOwned"/> carries a global query
+/// filter on the current company, and gets that company stamped on insert.
+/// Both are applied here rather than in controllers on purpose: manual
+/// filtering is correct until somebody adds a query and forgets, and this
+/// codebase has already shipped that exact bug once.
+///
+/// A filter can be lifted with <c>IgnoreQueryFilters()</c>, which is what the
+/// superadmin endpoints use to look across companies. Grep for it to find
+/// every place that deliberately crosses the boundary.
+/// </remarks>
+public class GarageFlowDbContext(
+    DbContextOptions<GarageFlowDbContext> options,
+    TenantContext tenant) : DbContext(options)
 {
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Vehicle> Vehicles => Set<Vehicle>();
@@ -23,6 +40,13 @@ public class GarageFlowDbContext(DbContextOptions<GarageFlowDbContext> options) 
     public DbSet<Delivery> Deliveries => Set<Delivery>();
     public DbSet<DeliveryPoint> DeliveryPoints => Set<DeliveryPoint>();
     public DbSet<CustomerRegistration> CustomerRegistrations => Set<CustomerRegistration>();
+    public DbSet<UserWorkshopLink> UserWorkshopLinks => Set<UserWorkshopLink>();
+    public DbSet<Branch> Branches => Set<Branch>();
+    public DbSet<ImpersonationLog> ImpersonationLogs => Set<ImpersonationLog>();
+    public DbSet<MenuItem> MenuItems => Set<MenuItem>();
+    public DbSet<RoleMenu> RoleMenus => Set<RoleMenu>();
+    public DbSet<CompanyRole> CompanyRoles => Set<CompanyRole>();
+    public DbSet<FiscalYearRecord> FiscalYearRecords => Set<FiscalYearRecord>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -37,10 +61,16 @@ public class GarageFlowDbContext(DbContextOptions<GarageFlowDbContext> options) 
             e.Property(x => x.Phone).HasMaxLength(40);
             e.Property(x => x.PasswordHash).HasMaxLength(400).IsRequired();
             e.Property(x => x.Role).HasMaxLength(20);
+            // Matches CompanyRole.Name, which is what it points at.
+            e.Property(x => x.CompanyRoleName).HasMaxLength(40);
             e.Property(x => x.Workshop).HasMaxLength(160);
-            e.Property(x => x.PasswordResetTokenHash).HasMaxLength(200);
+            // A SHA-256 hex digest — 64 characters, whatever length the code was.
+            e.Property(x => x.PasswordResetCodeHash).HasMaxLength(200);
             e.Property(x => x.MechanicName).HasMaxLength(120);
             e.Property(x => x.CustomerId).HasMaxLength(20);
+            e.Property(x => x.BranchId).HasMaxLength(20);
+            e.Property(x => x.FiscalYear).HasMaxLength(20);
+            e.Property(x => x.PhotoPath).HasMaxLength(300);
 
             // One account per email *per tenant* — the same person can belong to
             // two workshops, which is why the key is the pair.
@@ -338,9 +368,36 @@ public class GarageFlowDbContext(DbContextOptions<GarageFlowDbContext> options) 
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        b.Entity<UserWorkshopLink>(e =>
+        {
+            e.ToTable("UserWorkshopLinks");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserId).HasMaxLength(20).IsRequired();
+            e.Property(x => x.CompanyCode).HasMaxLength(40).IsRequired();
+            e.Property(x => x.CustomerId).HasMaxLength(20).IsRequired();
+
+            // One membership per person per garage. Joining twice is joining once.
+            e.HasIndex(x => new { x.UserId, x.CompanyCode }).IsUnique();
+
+            e.HasOne(x => x.User)
+                .WithMany(u => u.WorkshopLinks)
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Restrict rather than Cascade: SQL Server refuses a second cascade
+            // path into Customers, and deleting a customer record should not
+            // silently delete the person's account with another garage.
+            e.HasOne(x => x.Customer)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         b.Entity<Workshop>(e =>
         {
             e.ToTable("Workshops");
+            e.Property(x => x.About).HasMaxLength(600);
+            e.HasIndex(x => x.IsListed);
             e.HasKey(x => x.CompanyCode);
             e.Property(x => x.CompanyCode).HasMaxLength(40);
             e.Property(x => x.Name).HasMaxLength(160);
@@ -351,6 +408,10 @@ public class GarageFlowDbContext(DbContextOptions<GarageFlowDbContext> options) 
             e.Property(x => x.TaxNumber).HasMaxLength(40);
             e.Property(x => x.InvoiceFooter).HasMaxLength(500);
             e.Property(x => x.OpeningHours).HasMaxLength(200);
+            e.Property(x => x.BankName).HasMaxLength(120);
+            e.Property(x => x.BankAccountName).HasMaxLength(160);
+            e.Property(x => x.BankAccountNumber).HasMaxLength(60);
+            e.Property(x => x.BankBranch).HasMaxLength(120);
             e.Property(x => x.DeliveryBaseFee).HasPrecision(18, 2);
             e.Property(x => x.DeliveryPerKm).HasPrecision(18, 2);
             e.Property(x => x.DeliveryFreeAbove).HasPrecision(18, 2);
@@ -429,6 +490,33 @@ public class GarageFlowDbContext(DbContextOptions<GarageFlowDbContext> options) 
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        b.Entity<ImpersonationLog>(e =>
+        {
+            e.ToTable("ImpersonationLogs");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserId).HasMaxLength(20).IsRequired();
+            e.Property(x => x.UserEmail).HasMaxLength(160);
+            e.Property(x => x.CompanyCode).HasMaxLength(40).IsRequired();
+            e.Property(x => x.Reason).HasMaxLength(300);
+
+            // Read as "who has been in this company, most recent first".
+            e.HasIndex(x => new { x.CompanyCode, x.At });
+        });
+
+        b.Entity<Branch>(e =>
+        {
+            e.ToTable("Branches");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasMaxLength(20);
+            e.Property(x => x.CompanyCode).HasMaxLength(40).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            e.Property(x => x.Address).HasMaxLength(300);
+            e.Property(x => x.Phone).HasMaxLength(40);
+
+            // Always read as "the selectable branches for this tenant".
+            e.HasIndex(x => new { x.CompanyCode, x.IsActive });
+        });
+
         b.Entity<Activity>(e =>
         {
             e.ToTable("Activities");
@@ -438,5 +526,141 @@ public class GarageFlowDbContext(DbContextOptions<GarageFlowDbContext> options) 
             e.Property(x => x.Kind).HasMaxLength(20);
             e.HasIndex(x => x.At);
         });
+
+        b.Entity<FiscalYearRecord>(e =>
+        {
+            e.ToTable("FiscalYears");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Code).HasMaxLength(20).IsRequired();
+
+            // One row per code per company. Two years both called 2082/83 would
+            // make "which books am I looking at?" unanswerable.
+            e.HasIndex(x => new { x.CompanyCode, x.Code }).IsUnique();
+        });
+
+        b.Entity<MenuItem>(e =>
+        {
+            e.ToTable("MenuItems");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Key).HasMaxLength(40).IsRequired();
+            e.Property(x => x.Label).HasMaxLength(80);
+            e.Property(x => x.LabelNe).HasMaxLength(80);
+            e.Property(x => x.Route).HasMaxLength(120);
+            e.Property(x => x.Icon).HasMaxLength(60);
+            e.Property(x => x.ParentKey).HasMaxLength(40);
+            e.Property(x => x.Module).HasMaxLength(40);
+
+            // The key is the identity everything else points at, so a duplicate
+            // would make "which row does this role mean?" unanswerable.
+            e.HasIndex(x => x.Key).IsUnique();
+        });
+
+        b.Entity<RoleMenu>(e =>
+        {
+            e.ToTable("RoleMenus");
+            e.HasKey(x => x.Id);
+            // Wide enough for a company's own role name, not just the four
+            // built-in ones — this column holds CompanyRole.Name.
+            e.Property(x => x.Role).HasMaxLength(40).IsRequired();
+            e.Property(x => x.MenuKey).HasMaxLength(40).IsRequired();
+
+            // One decision per company, per role, per row. Without this a save
+            // that raced itself would leave two rows disagreeing, and which one
+            // won would depend on read order.
+            e.HasIndex(x => new { x.CompanyCode, x.Role, x.MenuKey }).IsUnique();
+        });
+
+        b.Entity<CompanyRole>(e =>
+        {
+            e.ToTable("CompanyRoles");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(40).IsRequired();
+            e.Property(x => x.BaseRole).HasMaxLength(20).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(200);
+
+            // The name is what accounts and menu rows point at, so two roles
+            // sharing one inside a company would make "which menu does this
+            // person get?" unanswerable.
+            e.HasIndex(x => new { x.CompanyCode, x.Name }).IsUnique();
+        });
+
+        // ── Tenancy ──────────────────────────────────────────────────────────
+        // Every entity implementing ITenantOwned gets the column, an index and
+        // a filter on the current company. Driven by reflection so a new
+        // tenant-owned table is covered the moment it is declared.
+        foreach (var entity in b.Model.GetEntityTypes())
+        {
+            if (!typeof(ITenantOwned).IsAssignableFrom(entity.ClrType)) continue;
+
+            b.Entity(entity.ClrType)
+                .Property(nameof(ITenantOwned.CompanyCode))
+                .HasMaxLength(40)
+                .IsRequired();
+
+            // Nearly every query filters on it, so it earns an index.
+            b.Entity(entity.ClrType).HasIndex(nameof(ITenantOwned.CompanyCode));
+
+            ApplyTenantFilterMethod
+                .MakeGenericMethod(entity.ClrType)
+                .Invoke(this, [b]);
+        }
+    }
+
+    private static readonly System.Reflection.MethodInfo ApplyTenantFilterMethod =
+        typeof(GarageFlowDbContext).GetMethod(
+            nameof(ApplyTenantFilter),
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+
+    /// <summary>Filters one entity type to the current company.</summary>
+    /// <remarks>
+    /// A real lambda, not a hand-built expression tree, and that distinction is
+    /// load-bearing. An earlier version used
+    /// <c>Expression.Constant(tenant)</c>, which baked one TenantContext into
+    /// the model — and because EF caches the model per context type, every
+    /// later request reused the first request's company. Two companies saw each
+    /// other's data and the filter looked correct in the source.
+    ///
+    /// Closing over <c>tenant</c> instead makes it a field on this context, which
+    /// EF re-reads on every query.
+    /// </remarks>
+    private void ApplyTenantFilter<T>(ModelBuilder b) where T : class, ITenantOwned =>
+        b.Entity<T>().HasQueryFilter(
+            e => tenant.CompanyCode == null || e.CompanyCode == tenant.CompanyCode);
+    /// <summary>Stamps the company on anything new before it is written.</summary>
+    /// <remarks>
+    /// Central for the same reason as the filter: a controller that forgets to
+    /// set it would write a row belonging to nobody, invisible to every company
+    /// including the one that created it.
+    /// </remarks>
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        StampTenant();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        StampTenant();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void StampTenant()
+    {
+        foreach (var entry in ChangeTracker.Entries<ITenantOwned>())
+        {
+            if (entry.State != EntityState.Added) continue;
+
+            // An explicit value wins. The seeder sets one directly, and the
+            // superadmin creating a company writes into a tenant it is not
+            // itself bound to.
+            if (!string.IsNullOrEmpty(entry.Entity.CompanyCode)) continue;
+
+            entry.Entity.CompanyCode = tenant.CompanyCode
+                ?? throw new InvalidOperationException(
+                    $"Cannot save {entry.Entity.GetType().Name} with no company. " +
+                    "Either the request has no tenant or the row needs one set explicitly.");
+        }
     }
 }

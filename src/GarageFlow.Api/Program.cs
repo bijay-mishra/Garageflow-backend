@@ -27,6 +27,11 @@ builder.Services.AddDbContext<GarageFlowDbContext>(options =>
 
 // ── Services ─────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton(TimeProvider.System);
+// Which company the request belongs to. Scoped, bound from the token by
+// TenantMiddleware, and read by the DbContext to filter every tenant-owned
+// query — see ITenantOwned.
+builder.Services.AddScoped<TenantContext>();
+
 builder.Services.AddScoped<ActivityLog>();
 
 // Mobile apps. NotificationService and CurrentUserService are scoped because
@@ -35,6 +40,13 @@ builder.Services.AddScoped<ActivityLog>();
 // is looked up once per request rather than once per endpoint that needs it.
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<CurrentUserService>();
+
+// Which branch and accounting year the request is answered against. Scoped for
+// the same reason as CurrentUserService: it caches its answer per request, and
+// every list endpoint asks.
+builder.Services.AddScoped<WorkspaceService>();
+builder.Services.AddScoped<MenuService>();
+builder.Services.AddScoped<RoleService>();
 builder.Services.AddSingleton<PhotoStorage>();
 
 // Turns catalogue services into priced job lines. Scoped for the same reason as
@@ -63,6 +75,12 @@ builder.Services.AddScoped<PaymentService>();
 // ── Authentication ───────────────────────────────────────────────────────────
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
+// Sign in with Google. Off unless a client ID is configured, and the app
+// hides the button when it is — see GoogleAuth.
+builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection("GoogleAuth"));
+builder.Services.AddHttpClient(nameof(GoogleAuth));
+builder.Services.AddScoped<GoogleAuth>();
+
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<IEmailSender, EmailSender>();
 
@@ -122,7 +140,10 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
-builder.Services.AddControllers();
+// The half-signed-in gate is global rather than per controller: a rule that
+// depends on remembering an attribute holds until the next endpoint somebody
+// adds. Opting out is the deliberate act — see AllowWhileSettingPassword.
+builder.Services.AddControllers(o => o.Filters.Add<MustSetPasswordFilter>());
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
@@ -241,6 +262,10 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseAuthentication();
 app.UseAuthorization();
 
+// After UseAuthorization: the principal has to exist before the company can be
+// read off it.
+app.UseMiddleware<TenantMiddleware>();
+
 app.MapControllers();
 
 // Liveness probe — also a quick way to confirm the API is up before starting the UI.
@@ -253,10 +278,28 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<GarageFlowDbContext>();
     await db.Database.MigrateAsync();
+
+    // The seeder writes tenant-owned rows with no request behind it, so it has
+    // to say which company they belong to. Said out loud here rather than
+    // defaulted inside the seeder: a silent fallback is how rows end up in the
+    // wrong company once there is more than one.
+    scope.ServiceProvider.GetRequiredService<TenantContext>()
+        .BindTo(DbSeeder.DemoCompanyCode);
+
     await DbSeeder.SeedAsync(db);
     await DbSeeder.SeedServicesAsync(db);
     await DbSeeder.SeedWorkshopAsync(db);
+    await DbSeeder.SeedBranchesAsync(db);
     await DbSeeder.SeedUsersAsync(db, scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>());
+
+    // The platform operator, who belongs to no company. Seeded last so the
+    // id generator sees every other user first.
+    await DbSeeder.SeedSuperAdminAsync(db, scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>());
+
+    // Additive on every start: a new release's menu rows appear, and anything an
+    // operator has renamed or reordered is left alone. Resetting the table to
+    // match the code would silently undo their work on each deploy.
+    await MenuSeeder.SeedAsync(db);
 }
 
 app.Run();

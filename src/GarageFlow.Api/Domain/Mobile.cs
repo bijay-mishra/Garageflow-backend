@@ -52,8 +52,14 @@ public class JobPhoto
 /// becomes a job card only when someone accepts it, at which point
 /// <see cref="JobCardId"/> is filled in and the two are linked for good.
 /// </remarks>
-public class Booking
+public class Booking : ITenantOwned
 {
+    /// <summary>The company that owns this row.</summary>
+    /// <remarks>
+    /// Set automatically on save from the request's token, and enforced by a
+    /// global query filter — no controller reads or writes it directly.
+    /// </remarks>
+    public string CompanyCode { get; set; } = default!;
     public string Id { get; set; } = default!;
 
     public string CustomerId { get; set; } = default!;
@@ -103,8 +109,14 @@ public class Booking
 /// <c>NotificationService</c> whenever something happens that the owner of the
 /// row would want to know about.
 /// </remarks>
-public class Notification
+public class Notification : ITenantOwned
 {
+    /// <summary>The company that owns this row.</summary>
+    /// <remarks>
+    /// Set automatically on save from the request's token, and enforced by a
+    /// global query filter — no controller reads or writes it directly.
+    /// </remarks>
+    public string CompanyCode { get; set; } = default!;
     public int Id { get; set; }
 
     /// <summary>Recipient. Always a real user — nothing is broadcast.</summary>
