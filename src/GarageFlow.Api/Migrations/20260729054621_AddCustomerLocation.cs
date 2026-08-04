@@ -41,7 +41,7 @@ namespace GarageFlow.Api.Migrations
                 ("CUS-007", "Bhaktapur", 27.6710, 85.4298),
             })
             {
-                migrationBuilder.Sql(
+                migrationBuilder.DeferredSql(
                     $"""
                      UPDATE Customers
                      SET Latitude = {lat.ToString(System.Globalization.CultureInfo.InvariantCulture)},

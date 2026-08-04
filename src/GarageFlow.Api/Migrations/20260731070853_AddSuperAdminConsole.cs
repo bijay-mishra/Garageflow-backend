@@ -57,7 +57,7 @@ namespace GarageFlow.Api.Migrations
             // Existing companies predate module configuration. Given the full
             // set rather than an empty one — empty would read as "every module
             // off" and blank the menu for a workshop already using them.
-            migrationBuilder.Sql(
+            migrationBuilder.DeferredSql(
                 "UPDATE Workshops SET EnabledModules = " +
                 "'services,billing,reports,serviceHistory,staff,deliveries,fiscalYear,multiBranch,onlineBooking,onlinePayment' " +
                 "WHERE EnabledModules IS NULL OR EnabledModules = '';");
@@ -65,7 +65,7 @@ namespace GarageFlow.Api.Migrations
             // And they are active. A bit column added to an existing table
             // defaults to 0, which would suspend every company on deploy —
             // locking every current user out the moment this ships.
-            migrationBuilder.Sql("UPDATE Workshops SET IsActive = 1;");
+            migrationBuilder.DeferredSql("UPDATE Workshops SET IsActive = 1;");
         }
 
         /// <inheritdoc />

@@ -77,7 +77,7 @@ namespace GarageFlow.Api.Migrations
             // the account would appear to belong to nowhere: no garage in "mine",
             // and select-workshop refusing the very workshop they are looking at.
             // This turns the old implicit binding into an explicit membership.
-            migrationBuilder.Sql(
+            migrationBuilder.DeferredSql(
                 """
                 INSERT INTO UserWorkshopLinks (UserId, CompanyCode, CustomerId, IsPrimary, JoinedAt)
                 SELECT u.Id, u.CompanyCode, u.CustomerId, 1, u.CreatedAt
@@ -94,7 +94,7 @@ namespace GarageFlow.Api.Migrations
             // something to show on the first run. A real deployment leaves every
             // workshop unlisted until it chooses otherwise, which is why this is
             // scoped to DEMO rather than being the column default.
-            migrationBuilder.Sql("UPDATE Workshops SET IsListed = 1 WHERE CompanyCode = 'DEMO';");
+            migrationBuilder.DeferredSql("UPDATE Workshops SET IsListed = 1 WHERE CompanyCode = 'DEMO';");
         }
 
         /// <inheritdoc />

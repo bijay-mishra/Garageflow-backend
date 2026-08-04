@@ -5,6 +5,7 @@ using GarageFlow.Api.Data;
 using GarageFlow.Api.Domain;
 using GarageFlow.Api.Services;
 using GarageFlow.Api.Services.Payments;
+using GarageFlow.Api.Services.Support;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -48,6 +49,15 @@ builder.Services.AddScoped<WorkspaceService>();
 builder.Services.AddScoped<MenuService>();
 builder.Services.AddScoped<RoleService>();
 builder.Services.AddSingleton<PhotoStorage>();
+
+// The support chatbot. SupportBot is scoped because it reads the request's
+// tenant-filtered DbContext to build the asker's context; SupportAi is a
+// singleton because it owns the Anthropic HTTP client and its connection pool,
+// which should be shared rather than rebuilt per request.
+builder.Services.Configure<SupportAiOptions>(
+    builder.Configuration.GetSection(SupportAiOptions.SectionName));
+builder.Services.AddSingleton<SupportAi>();
+builder.Services.AddScoped<SupportBot>();
 
 // Turns catalogue services into priced job lines. Scoped for the same reason as
 // the two above: it works on the request's tracked entities and leaves the

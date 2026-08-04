@@ -57,6 +57,11 @@ public static class MenuSeeder
 
         new("reports", "Reports", "रिपोर्ट", "/reports", "chart", 90, Module: "reports"),
 
+        // Customer questions waiting on a person here. Not gated on a module:
+        // a workshop that can be asked a question can always answer it, and a
+        // hidden inbox is an unanswered customer.
+        new("support", "Customer chat", "ग्राहक च्याट", "/support", "chat", 95),
+
         new("settings", "Settings", "सेटिङ", "", "cog", 100),
         new("workshop", "Workshop", "वर्कशप", "/workshop", "storefront", 110, ParentKey: "settings"),
         new("staff", "Staff", "कर्मचारी", "/staff", "userGroup", 120, Module: "staff", ParentKey: "settings"),

@@ -33,7 +33,7 @@ namespace GarageFlow.Api.Migrations
             // Honda and Suzuki are deliberately absent. Both sell cars *and*
             // two-wheelers here, so a make match would turn every Honda CR-V
             // into a bike; they are left to the model pass below.
-            migrationBuilder.Sql("""
+            migrationBuilder.DeferredSql("""
                 UPDATE Vehicles
                 SET    Type = 'Bike'
                 WHERE  Make IN ('Bajaj', 'TVS', 'Hero', 'Hero Honda', 'Royal Enfield',
@@ -47,7 +47,7 @@ namespace GarageFlow.Api.Migrations
             // Short names are anchored with a prefix match rather than wrapped in
             // wildcards: a bare '%CB%' would also claim any car whose model
             // merely contains those letters.
-            migrationBuilder.Sql("""
+            migrationBuilder.DeferredSql("""
                 UPDATE Vehicles
                 SET    Type = 'Bike'
                 WHERE  Type <> 'Bike'
@@ -70,7 +70,7 @@ namespace GarageFlow.Api.Migrations
             // Commercial-only marques. Tata and Mahindra are excluded on purpose
             // — both sell passenger cars (Nexon, Scorpio), so the make proves
             // nothing about the body.
-            migrationBuilder.Sql("""
+            migrationBuilder.DeferredSql("""
                 UPDATE Vehicles
                 SET    Type = 'Truck'
                 WHERE  Make IN ('Ashok Leyland', 'Eicher', 'BharatBenz');

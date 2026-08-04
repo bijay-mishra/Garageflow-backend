@@ -99,7 +99,7 @@ namespace GarageFlow.Api.Migrations
             // default above put everything in "cash"; this moves the ones that
             // were not. Kept in step with Vocabulary.ChannelFor — a card
             // terminal settles through the bank, not through a wallet.
-            migrationBuilder.Sql(
+            migrationBuilder.DeferredSql(
                 """
                 UPDATE Payments SET Channel = 'bank'
                 WHERE Method IN ('Bank Transfer', 'Card');
@@ -111,7 +111,7 @@ namespace GarageFlow.Api.Migrations
             // InitiatedAt has no meaningful history, so it is anchored to when
             // the money actually landed. Leaving it at year 1 would make every
             // old payment look like an attempt abandoned two millennia ago.
-            migrationBuilder.Sql("UPDATE Payments SET InitiatedAt = At;");
+            migrationBuilder.DeferredSql("UPDATE Payments SET InitiatedAt = At;");
         }
 
         /// <inheritdoc />

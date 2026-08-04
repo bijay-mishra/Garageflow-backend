@@ -114,7 +114,7 @@ namespace GarageFlow.Api.Migrations
                 "Activities", "Notifications",
             })
             {
-                migrationBuilder.Sql(
+                migrationBuilder.DeferredSql(
                     $"UPDATE [{table}] SET CompanyCode = 'DEMO' WHERE CompanyCode = '';");
             }
 

@@ -34,6 +34,9 @@ public class GarageFlowDbContext(
     public DbSet<JobPhoto> JobPhotos => Set<JobPhoto>();
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<Notification> Notifications => Set<Notification>();
+
+    public DbSet<SupportThread> SupportThreads => Set<SupportThread>();
+    public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
     public DbSet<Service> Services => Set<Service>();
     public DbSet<BookingService> BookingServices => Set<BookingService>();
     public DbSet<Workshop> Workshops => Set<Workshop>();
@@ -418,6 +421,45 @@ public class GarageFlowDbContext(
             e.Property(x => x.DeliveryFreeAbove).HasPrecision(18, 2);
             e.Ignore(x => x.HasLocation);
             e.Ignore(x => x.CanDeliver);
+        });
+
+        b.Entity<SupportThread>(e =>
+        {
+            e.ToTable("SupportThreads");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Audience).HasMaxLength(20);
+            e.Property(x => x.OpenedByUserId).HasMaxLength(20).IsRequired();
+            e.Property(x => x.CustomerId).HasMaxLength(20);
+            e.Property(x => x.Subject).HasMaxLength(200);
+            e.Property(x => x.Status).HasMaxLength(20);
+
+            // The inbox is "this audience, newest first", and a customer's own
+            // list is "my threads, newest first" — one index serves both.
+            e.HasIndex(x => new { x.Audience, x.LastMessageAt });
+            e.HasIndex(x => x.CustomerId);
+
+            // Deleting a thread takes its messages. There is nothing a message
+            // means without the conversation it sat in.
+            e.HasMany(x => x.Messages)
+                .WithOne(x => x.Thread!)
+                .HasForeignKey(x => x.ThreadId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<SupportMessage>(e =>
+        {
+            e.ToTable("SupportMessages");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Sender).HasMaxLength(20);
+            e.Property(x => x.SenderUserId).HasMaxLength(20);
+            e.Property(x => x.SenderName).HasMaxLength(160);
+
+            // Long enough for somebody describing a fault in their own words,
+            // and for an AI answer that walks them through a setting.
+            e.Property(x => x.Body).HasMaxLength(4000);
+            e.Property(x => x.Source).HasMaxLength(10);
+
+            e.HasIndex(x => new { x.ThreadId, x.CreatedAt });
         });
 
         b.Entity<Delivery>(e =>
