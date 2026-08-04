@@ -8,3 +8,8 @@ appsettings.*.local.json
 # The API console, when it is started in the background. Holds the reset codes
 # that SMTP would otherwise have emailed — never commit it.
 logs/
+
+# Company logos, uploaded at runtime. These are customers' brand assets, not
+# source: they belong in whatever storage the deployment uses, and committing
+# them would grow the repo by one image per company forever.
+src/GarageFlow.Api/wwwroot/logos/

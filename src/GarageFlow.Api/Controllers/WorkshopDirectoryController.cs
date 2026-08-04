@@ -73,6 +73,7 @@ public class WorkshopDirectoryController(
                 w.Phone,
                 w.About,
                 w.OpeningHours,
+                w.LogoPath,
                 w.Latitude,
                 w.Longitude,
                 ServiceCount = db.Services.Count(s => s.IsActive && s.IsBookable),
@@ -88,6 +89,7 @@ public class WorkshopDirectoryController(
                 Phone = w.Phone,
                 About = w.About,
                 OpeningHours = w.OpeningHours,
+                LogoUrl = PhotoStorage.PublicUrl(Request, w.LogoPath),
                 Latitude = w.Latitude,
                 Longitude = w.Longitude,
                 ServiceCount = w.ServiceCount,
@@ -130,24 +132,14 @@ public class WorkshopDirectoryController(
 
         var codes = myLinks.Keys.ToList();
 
-        var cards = await db.Workshops.AsNoTracking()
+        // The rows first, the cards after. The logo URL needs the request's host
+        // to be absolute, which is not something SQL can be asked for — and a
+        // customer belongs to a handful of garages, so this is a handful of rows.
+        var rows = await db.Workshops.AsNoTracking()
             .Where(w => codes.Contains(w.CompanyCode))
-            .Select(w => new WorkshopCardDto
-            {
-                CompanyCode = w.CompanyCode,
-                Name = w.Name,
-                Address = w.Address,
-                Phone = w.Phone,
-                About = w.About,
-                OpeningHours = w.OpeningHours,
-                Latitude = w.Latitude,
-                Longitude = w.Longitude,
-                ServiceCount = 0,
-                IsJoined = true,
-                IsPrimary = false,
-                DistanceKm = null,
-            })
             .ToListAsync(ct);
+
+        var cards = rows.Select(w => Card(w, joined: true, primary: false)).ToList();
 
         // Flags applied after the projection: EF cannot see into the dictionary.
         var withFlags = cards
@@ -291,7 +283,14 @@ public class WorkshopDirectoryController(
             .ToDictionaryAsync(l => l.CompanyCode, l => l.IsPrimary, ct);
     }
 
-    private static WorkshopCardDto Card(Workshop w, bool joined, bool primary) => new()
+    /// <summary>
+    /// One garage as the app's directory shows it.
+    /// </summary>
+    /// <remarks>
+    /// An instance method rather than static: the logo URL has to be absolute
+    /// and only the request knows the host.
+    /// </remarks>
+    private WorkshopCardDto Card(Workshop w, bool joined, bool primary) => new()
     {
         CompanyCode = w.CompanyCode,
         Name = w.Name,
@@ -299,6 +298,7 @@ public class WorkshopDirectoryController(
         Phone = w.Phone,
         About = w.About,
         OpeningHours = w.OpeningHours,
+        LogoUrl = PhotoStorage.PublicUrl(Request, w.LogoPath),
         Latitude = w.Latitude,
         Longitude = w.Longitude,
         ServiceCount = 0,

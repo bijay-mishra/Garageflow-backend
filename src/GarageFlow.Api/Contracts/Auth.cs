@@ -128,6 +128,17 @@ public record WorkshopCardDto
     public required string About { get; init; }
     public required string OpeningHours { get; init; }
 
+    /// <summary>
+    /// The garage's logo, or null if it has not uploaded one.
+    /// </summary>
+    /// <remarks>
+    /// A directory is a list of strangers, and a mark is what makes one of them
+    /// the place the customer has actually driven past. The app falls back to
+    /// the first letter of the name rather than a generic icon, so a garage
+    /// without a logo still looks like itself.
+    /// </remarks>
+    public required string? LogoUrl { get; init; }
+
     public required double? Latitude { get; init; }
     public required double? Longitude { get; init; }
 

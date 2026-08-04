@@ -17,6 +17,16 @@ public record CompanyDto
     public required string Email { get; init; }
     public required string Address { get; init; }
 
+    /// <summary>
+    /// Absolute URL of the company's logo, or null if it has not set one.
+    /// </summary>
+    /// <remarks>
+    /// The console shows it beside the name for the same reason the list carries
+    /// counts: a page of forty company codes is faster to read by mark than by
+    /// word, and the operator is the one person who sees them all at once.
+    /// </remarks>
+    public required string? LogoUrl { get; init; }
+
     /// <summary>False means nobody there can sign in.</summary>
     public required bool IsActive { get; init; }
 

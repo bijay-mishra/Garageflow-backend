@@ -286,6 +286,17 @@ public record WorkshopDto
     /// <summary>PAN, printed on every bill.</summary>
     public required string TaxNumber { get; init; }
 
+    /// <summary>
+    /// Absolute URL of the workshop's logo, or null if it has not set one.
+    /// </summary>
+    /// <remarks>
+    /// Absolute, because the three clients that read it are all on other
+    /// origins. Null rather than a placeholder image: what to show instead is
+    /// the client's decision, and the printed invoice's answer (nothing, so the
+    /// name sits where the mark would have) differs from the sidebar's.
+    /// </remarks>
+    public required string? LogoUrl { get; init; }
+
     /// <summary>Map pin, or null until somebody drops one.</summary>
     public required double? Latitude { get; init; }
     public required double? Longitude { get; init; }

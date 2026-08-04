@@ -406,6 +406,7 @@ public class GarageFlowDbContext(
             e.Property(x => x.Phone).HasMaxLength(40);
             e.Property(x => x.Email).HasMaxLength(160);
             e.Property(x => x.TaxNumber).HasMaxLength(40);
+            e.Property(x => x.LogoPath).HasMaxLength(300);
             e.Property(x => x.InvoiceFooter).HasMaxLength(500);
             e.Property(x => x.OpeningHours).HasMaxLength(200);
             e.Property(x => x.BankName).HasMaxLength(120);

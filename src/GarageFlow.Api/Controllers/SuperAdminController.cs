@@ -35,6 +35,7 @@ public class SuperAdminController(
     GarageFlowDbContext db,
     TokenService tokens,
     IPasswordHasher<User> passwordHasher,
+    PhotoStorage photos,
     TimeProvider clock,
     ILogger<SuperAdminController> logger) : ControllerBase
 {
@@ -86,6 +87,7 @@ public class SuperAdminController(
             Phone = w.Phone,
             Email = w.Email,
             Address = w.Address,
+            LogoUrl = PhotoStorage.PublicUrl(Request, w.LogoPath),
             IsActive = w.IsActive,
             IsListed = w.IsListed,
             EnabledModules = Split(w.EnabledModules),
@@ -294,6 +296,9 @@ public class SuperAdminController(
                     Phone = workshop.Phone,
                     Email = workshop.Email,
                     Address = workshop.Address,
+                    // A company created a second ago has no logo. The console
+                    // offers to add one on the handover screen that follows.
+                    LogoUrl = null,
                     IsActive = true,
                     IsListed = false,
                     EnabledModules = modules,
@@ -364,6 +369,7 @@ public class SuperAdminController(
                 Phone = workshop.Phone,
                 Email = workshop.Email,
                 Address = workshop.Address,
+                LogoUrl = PhotoStorage.PublicUrl(Request, workshop.LogoPath),
                 IsActive = workshop.IsActive,
                 IsListed = workshop.IsListed,
                 EnabledModules = Split(workshop.EnabledModules),
@@ -377,6 +383,103 @@ public class SuperAdminController(
                 ? "Nothing changed."
                 : $"{workshop.Name}: {string.Join(", ", changes)}."));
     }
+
+    /// <summary>
+    /// Sets a company's logo on its behalf.
+    /// </summary>
+    /// <remarks>
+    /// The same thing the workshop can do for itself on its settings screen, and
+    /// it exists here because of when it is needed: the operator sets a company
+    /// up before anyone at that workshop has ever signed in, and the logo is
+    /// usually in the same email as the name and the PAN. Making them wait for
+    /// the owner to do it means the first invoice goes out bare.
+    ///
+    /// The file rules are <see cref="WorkshopController.CheckLogoAsync"/>'s, not
+    /// a second copy — an operator upload must not be able to store something a
+    /// workshop upload would have refused.
+    /// </remarks>
+    [HttpPost("companies/{code}/logo")]
+    [ProducesResponseType<ApiResponse<CompanyDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ApiResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiResponse>(StatusCodes.Status404NotFound)]
+    [RequestSizeLimit(PhotoStorage.MaxLogoRequestBytes)]
+    public async Task<ActionResult<ApiResponse<CompanyDto>>> UploadCompanyLogo(
+        string code, IFormFile file, CancellationToken ct)
+    {
+        var workshop = await db.Workshops.FirstOrDefaultAsync(
+            w => w.CompanyCode == code.ToUpperInvariant(), ct);
+
+        if (workshop is null)
+            return NotFound(ApiResponse.Failure($"No company with the code '{code}'."));
+
+        var problem = await WorkshopController.CheckLogoAsync(file, ct);
+        if (problem is not null) return BadRequest(ApiResponse.Failure(problem));
+
+        var previous = workshop.LogoPath;
+
+        workshop.LogoPath = await photos.SaveLogoAsync(file, workshop.CompanyCode, ct);
+        workshop.UpdatedAt = clock.GetUtcNow().UtcDateTime;
+        await db.SaveChangesAsync(ct);
+
+        if (previous is not null) photos.Delete(previous);
+
+        logger.LogInformation("Superadmin set the logo for company {Code}", workshop.CompanyCode);
+
+        return Ok(ApiResponse<CompanyDto>.Ok(
+            Card(workshop), $"Logo set for {workshop.Name}."));
+    }
+
+    /// <summary>Removes a company's logo.</summary>
+    [HttpDelete("companies/{code}/logo")]
+    [ProducesResponseType<ApiResponse<CompanyDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ApiResponse>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ApiResponse<CompanyDto>>> DeleteCompanyLogo(
+        string code, CancellationToken ct)
+    {
+        var workshop = await db.Workshops.FirstOrDefaultAsync(
+            w => w.CompanyCode == code.ToUpperInvariant(), ct);
+
+        if (workshop is null)
+            return NotFound(ApiResponse.Failure($"No company with the code '{code}'."));
+
+        var previous = workshop.LogoPath;
+
+        workshop.LogoPath = null;
+        workshop.UpdatedAt = clock.GetUtcNow().UtcDateTime;
+        await db.SaveChangesAsync(ct);
+
+        if (previous is not null) photos.Delete(previous);
+
+        return Ok(ApiResponse<CompanyDto>.Ok(
+            Card(workshop), $"Logo removed from {workshop.Name}."));
+    }
+
+    /// <summary>
+    /// One company as the console shows it, without the counts.
+    /// </summary>
+    /// <remarks>
+    /// The counts need four grouped queries and the caller of this has just
+    /// changed a logo, so they are left at zero rather than paid for. The list
+    /// screen refetches after any mutation and fills them in.
+    /// </remarks>
+    private CompanyDto Card(Workshop w) => new()
+    {
+        CompanyCode = w.CompanyCode,
+        Name = w.Name,
+        LegalName = w.LegalName,
+        Phone = w.Phone,
+        Email = w.Email,
+        Address = w.Address,
+        LogoUrl = PhotoStorage.PublicUrl(Request, w.LogoPath),
+        IsActive = w.IsActive,
+        IsListed = w.IsListed,
+        EnabledModules = Split(w.EnabledModules),
+        UserCount = 0,
+        CustomerCount = 0,
+        JobCount = 0,
+        CreatedAt = w.CreatedAt,
+        LastActiveAt = null,
+    };
 
     /// <summary>
     /// Deletes a company and everything belonging to it.
@@ -425,6 +528,7 @@ public class SuperAdminController(
         }
 
         var name = workshop.Name;
+        var logoPath = workshop.LogoPath;
 
         // Children before parents. The order below is what the foreign keys
         // demand, not a preference — SQL Server refuses several of the cascade
@@ -474,6 +578,11 @@ public class SuperAdminController(
         db.Workshops.Remove(workshop);
 
         await db.SaveChangesAsync(ct);
+
+        // The one thing this company owned that is not a row. A workshop that
+        // asked to be removed and whose logo is still being served from our
+        // wwwroot has not been removed.
+        if (logoPath is not null) photos.Delete(logoPath);
 
         logger.LogWarning(
             "Superadmin deleted company {Code} ({Name}) and all of its data", companyCode, name);

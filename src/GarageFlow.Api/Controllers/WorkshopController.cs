@@ -28,6 +28,7 @@ public class WorkshopController(
     // two disagree, and the row is the operator's.
     TenantContext tenant,
     PaymentService payments,
+    PhotoStorage photos,
     ActivityLog activity,
     TimeProvider clock) : ControllerBase
 {
@@ -100,6 +101,103 @@ public class WorkshopController(
     }
 
     /// <summary>
+    /// Sets the workshop's logo. Owner or manager only.
+    /// </summary>
+    /// <remarks>
+    /// Its own endpoint rather than a field on the PUT above, because a file is
+    /// not a string: it needs a multipart body, a size limit and a type check,
+    /// and folding that into the settings form would mean re-uploading the image
+    /// every time somebody corrected a phone number.
+    /// </remarks>
+    [HttpPost("logo")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType<ApiResponse<WorkshopDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ApiResponse>(StatusCodes.Status400BadRequest)]
+    [RequestSizeLimit(PhotoStorage.MaxLogoRequestBytes)]
+    public async Task<ActionResult<ApiResponse<WorkshopDto>>> UploadLogo(
+        IFormFile file, CancellationToken ct)
+    {
+        var workshop = await LoadAsync(ct);
+
+        if (workshop is null) return NoWorkshop();
+
+        var problem = await CheckLogoAsync(file, ct);
+        if (problem is not null) return BadRequest(ApiResponse.Failure(problem));
+
+        var previous = workshop.LogoPath;
+
+        workshop.LogoPath = await photos.SaveLogoAsync(file, workshop.CompanyCode, ct);
+        workshop.UpdatedAt = clock.GetUtcNow().UtcDateTime;
+
+        activity.Add("Workshop logo updated", "customer");
+        await db.SaveChangesAsync(ct);
+
+        // Only once the row is committed, so a failed save leaves the old logo
+        // in place rather than none. Same order as the profile photo.
+        if (previous is not null) photos.Delete(previous);
+
+        return Ok(ApiResponse<WorkshopDto>.Ok(ToDto(workshop), "Logo updated."));
+    }
+
+    /// <summary>Removes the workshop's logo. Owner or manager only.</summary>
+    [HttpDelete("logo")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType<ApiResponse<WorkshopDto>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<ApiResponse<WorkshopDto>>> DeleteLogo(CancellationToken ct)
+    {
+        var workshop = await LoadAsync(ct);
+
+        if (workshop is null) return NoWorkshop();
+
+        var previous = workshop.LogoPath;
+
+        workshop.LogoPath = null;
+        workshop.UpdatedAt = clock.GetUtcNow().UtcDateTime;
+
+        activity.Add("Workshop logo removed", "customer");
+        await db.SaveChangesAsync(ct);
+
+        if (previous is not null) photos.Delete(previous);
+
+        return Ok(ApiResponse<WorkshopDto>.Ok(ToDto(workshop), "Logo removed."));
+    }
+
+    /// <summary>
+    /// Why an uploaded logo is unacceptable, or null when it is fine.
+    /// </summary>
+    /// <remarks>
+    /// Shared by this controller and the operator console, which both accept a
+    /// logo for the same reason and must accept exactly the same set of files —
+    /// two copies of an allow-list is how one of them ends up laxer.
+    /// </remarks>
+    internal static async Task<string?> CheckLogoAsync(IFormFile? file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0) return "Choose a logo to upload.";
+
+        if (file.Length > PhotoStorage.MaxLogoBytes)
+            return "That image is too large. Please choose one under 1 MB.";
+
+        if (!PhotoStorage.IsAllowedLogo(file.ContentType))
+            return $"That file type is not supported. Use one of: {PhotoStorage.AllowedLogoList}.";
+
+        // SVG is markup and gets served from this API's own origin, so a hostile
+        // one would run there. Read and screened before a byte reaches disk.
+        if (file.ContentType.Equals("image/svg+xml", StringComparison.OrdinalIgnoreCase))
+        {
+            using var reader = new StreamReader(file.OpenReadStream());
+            var markup = await reader.ReadToEndAsync(ct);
+
+            if (PhotoStorage.LooksLikeScriptedSvg(markup))
+            {
+                return "That SVG contains script and was not saved. "
+                       + "Export it as a plain image, or upload a PNG.";
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// The caller's workshop row, created on first read, or null if the caller
     /// belongs to no company.
     /// </summary>
@@ -162,6 +260,7 @@ public class WorkshopController(
         Phone = w.Phone,
         Email = w.Email,
         TaxNumber = w.TaxNumber,
+        LogoUrl = PhotoStorage.PublicUrl(Request, w.LogoPath),
         Latitude = w.Latitude,
         Longitude = w.Longitude,
         OpeningHours = w.OpeningHours,

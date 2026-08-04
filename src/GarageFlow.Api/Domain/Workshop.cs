@@ -37,6 +37,26 @@ public class Workshop
     public string TaxNumber { get; set; } = "";
 
     /// <summary>
+    /// The workshop's own logo, stored as a path relative to wwwroot — null
+    /// until somebody uploads one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A path and not the bytes. Rows are read on nearly every request that
+    /// touches a tenant, and a logo inlined into this table would be dragged
+    /// through each of them; the file sits under wwwroot where the web server
+    /// can serve it with a cache header and never wake the database at all.
+    /// </para>
+    /// <para>
+    /// It is decoration on the dashboard and evidence on the invoice. A bill
+    /// with the workshop's mark at the top is the one a customer recognises as
+    /// theirs, which is why this belongs on the tax record rather than in a
+    /// theme setting.
+    /// </para>
+    /// </remarks>
+    public string? LogoPath { get; set; }
+
+    /// <summary>
     /// Whether this garage appears in the public directory customers browse.
     /// </summary>
     /// <remarks>
