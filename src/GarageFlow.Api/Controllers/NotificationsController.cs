@@ -142,4 +142,52 @@ public class NotificationsController(
             ? NotFound(ApiResponse.Failure("That notification was not found."))
             : Ok(ApiResponse.Success("Notification removed."));
     }
+
+    /// <summary>Whether this account wants its phone to buzz.</summary>
+    [HttpGet("preferences")]
+    [ProducesResponseType<ApiResponse<NotificationPreferencesDto>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<ApiResponse<NotificationPreferencesDto>>> Preferences(
+        CancellationToken ct)
+    {
+        var userId = CurrentUserService.IdOf(User);
+        if (userId is null) return Forbid();
+
+        var enabled = await db.Users
+            .Where(u => u.Id == userId)
+            .Select(u => u.NotificationsEnabled)
+            .FirstOrDefaultAsync(ct);
+
+        return Ok(ApiResponse<NotificationPreferencesDto>.Ok(
+            new NotificationPreferencesDto { Enabled = enabled }, "Preferences loaded."));
+    }
+
+    /// <summary>
+    /// Turns push on or off for this account.
+    /// </summary>
+    /// <remarks>
+    /// Only ever the caller's own — there is no user id in the route, so this
+    /// cannot be pointed at somebody else's phone. Switching it off silences
+    /// delivery, not the record: the in-app feed keeps filling, because it is
+    /// this account's history of what happened and muting a phone should not
+    /// erase it.
+    /// </remarks>
+    [HttpPut("preferences")]
+    [ProducesResponseType<ApiResponse<NotificationPreferencesDto>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<ApiResponse<NotificationPreferencesDto>>> SetPreferences(
+        NotificationPreferencesRequest request, CancellationToken ct)
+    {
+        var userId = CurrentUserService.IdOf(User);
+        if (userId is null) return Forbid();
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+
+        if (user is null) return Forbid();
+
+        user.NotificationsEnabled = request.Enabled;
+        await db.SaveChangesAsync(ct);
+
+        return Ok(ApiResponse<NotificationPreferencesDto>.Ok(
+            new NotificationPreferencesDto { Enabled = user.NotificationsEnabled },
+            request.Enabled ? "Notifications on." : "Notifications off."));
+    }
 }

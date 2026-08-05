@@ -150,6 +150,25 @@ public class User
     /// <summary>A disabled user keeps their history but cannot sign in.</summary>
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// Whether this person wants their phone to buzz.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Gates <em>delivery</em>, not the record. The in-app notification list is
+    /// this account's history of what happened to its jobs and bills, and
+    /// silencing your phone should not erase that — so the rows are still
+    /// written and the feed still fills; only the push is suppressed.
+    /// </para>
+    /// <para>
+    /// Stored on the server rather than in the phone's own preferences because
+    /// the decision has to be honoured at <em>send</em> time. A purely local
+    /// switch still lets the server push to a device that has been told to stay
+    /// quiet, and relies on the app being installed to keep the promise.
+    /// </para>
+    /// </remarks>
+    public bool NotificationsEnabled { get; set; } = true;
+
     public DateTime CreatedAt { get; set; }
     public DateTime? LastLoginAt { get; set; }
 

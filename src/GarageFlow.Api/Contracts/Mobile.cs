@@ -214,6 +214,49 @@ public record CustomerJobDto
     public required int ProgressPct { get; init; }
 }
 
+/// <summary>
+/// A vehicle the customer is adding to their own account from the app.
+/// </summary>
+/// <remarks>
+/// Deliberately not <see cref="CreateVehicleRequest"/>, which carries a
+/// <c>CustomerId</c>. The safety property of the customer portal is that no
+/// endpoint anywhere in it accepts a customer id — the owner is always the
+/// signed-in account — and reusing the staff request would have put the one
+/// field that matters back on the wire.
+///
+/// <c>Vin</c> is absent for the same reason it is optional for staff: almost
+/// nobody knows their chassis number standing in the street, and a required
+/// field people cannot answer is a form they abandon. The workshop fills it in
+/// when the vehicle first arrives.
+/// </remarks>
+public class AddMyVehicleRequest
+{
+    [Required, StringLength(40, MinimumLength = 1)]
+    public string Plate { get; set; } = "";
+
+    [Required, StringLength(80, MinimumLength = 1)]
+    public string Make { get; set; } = "";
+
+    [Required, StringLength(80, MinimumLength = 1)]
+    public string Model { get; set; } = "";
+
+    [Range(1900, 2200)]
+    public int Year { get; set; }
+
+    [AllowedValues("Bike", "Car", "Van", "Bus", "Truck", "Tractor")]
+    public string Type { get; set; } = "Car";
+
+    [AllowedValues("Petrol", "Diesel", "Electric", "Hybrid", "CNG")]
+    public string Fuel { get; set; } = "Petrol";
+
+    /// <summary>Odometer reading in km. Zero simply means "not given".</summary>
+    [Range(0, 10_000_000)]
+    public int Odometer { get; set; }
+
+    [StringLength(40)]
+    public string Color { get; set; } = "";
+}
+
 // ── Notifications ────────────────────────────────────────────────────────────
 
 public record NotificationDto
@@ -235,6 +278,17 @@ public record NotificationDto
 
 /// <summary>The feed plus the badge count, so the app needs one call.</summary>
 public record NotificationFeedDto(int UnreadCount, IReadOnlyList<NotificationDto> Items);
+
+/// <summary>Whether this account wants its phone to buzz.</summary>
+public record NotificationPreferencesDto
+{
+    public required bool Enabled { get; init; }
+}
+
+public class NotificationPreferencesRequest
+{
+    public bool Enabled { get; set; } = true;
+}
 
 // ── Account management (dashboard-side) ──────────────────────────────────────
 

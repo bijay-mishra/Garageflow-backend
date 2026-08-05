@@ -25,7 +25,8 @@ namespace GarageFlow.Api.Controllers;
 [Produces("application/json")]
 public class CustomerPortalController(
     GarageFlowDbContext db,
-    CurrentUserService currentUser) : ControllerBase
+    CurrentUserService currentUser,
+    ActivityLog activity) : ControllerBase
 {
     /// <summary>The signed-in customer's vehicles.</summary>
     [HttpGet("vehicles")]
@@ -50,6 +51,77 @@ public class CustomerPortalController(
         return Ok(ApiResponse<PagedList<VehicleDto>>.Ok(
             page,
             page.Count == 0 ? "No vehicles on your account yet." : $"{page.Count} vehicle(s)."));
+    }
+
+    /// <summary>Adds a vehicle to the signed-in customer's own account.</summary>
+    /// <remarks>
+    /// The owner is taken from the token and never from the body, so this
+    /// cannot be pointed at somebody else's account.
+    ///
+    /// A null customer id is refused rather than defaulted. On the read paths
+    /// above, null means "not a member of a garage yet" and returns an empty
+    /// list; the same value on a write would mean "create this row owned by
+    /// nobody", which is a row no screen can ever show and no staff member can
+    /// clean up.
+    /// </remarks>
+    [HttpPost("vehicles")]
+    [ProducesResponseType<ApiResponse<VehicleDto>>(StatusCodes.Status201Created)]
+    [ProducesResponseType<ApiResponse>(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<ApiResponse<VehicleDto>>> AddVehicle(
+        AddMyVehicleRequest request, CancellationToken ct)
+    {
+        var customerId = await currentUser.CustomerIdAsync(User, ct);
+
+        if (customerId is null)
+            return BadRequest(ApiResponse.Failure(NoGarage));
+
+        var plate = request.Plate.Trim();
+
+        // Scoped to this garage by the global query filter, which is what makes
+        // the check both correct and safe: two workshops may legitimately each
+        // have a customer with the same plate, and neither is told about the
+        // other. Within one garage a duplicate plate is nearly always the same
+        // car being registered twice, so it is sent back to the workshop rather
+        // than silently forked into a second record with its own history.
+        if (await db.Vehicles.AnyAsync(v => v.Plate == plate, ct))
+        {
+            return BadRequest(ApiResponse.Failure(
+                $"A vehicle with plate {plate} is already registered at this garage. " +
+                "Ask the workshop to link it to your account."));
+        }
+
+        var vehicle = new Vehicle
+        {
+            // IgnoreQueryFilters: ids are unique across the whole table, not
+            // per company, so the next one has to be picked knowing every id
+            // that exists rather than only this tenant's.
+            Id = Ids.Next(await db.Vehicles.IgnoreQueryFilters().Select(v => v.Id).ToListAsync(ct), "VEH"),
+            CustomerId = customerId,
+            Make = request.Make.Trim(),
+            Model = request.Model.Trim(),
+            Year = request.Year,
+            Plate = plate,
+            Type = request.Type,
+            Fuel = request.Fuel,
+            Odometer = request.Odometer,
+            Color = request.Color.Trim(),
+        };
+
+        db.Vehicles.Add(vehicle);
+
+        // Flagged as self-registered in the feed. The workshop's vehicle list
+        // is a record they are accountable for, and a row that appeared without
+        // anyone at the counter touching it should say so.
+        activity.Add($"{plate} added by the customer from the app", "vehicle");
+
+        await db.SaveChangesAsync(ct);
+
+        var dto = await db.Vehicles.AsNoTracking().Where(v => v.Id == vehicle.Id).ToDto().FirstAsync(ct);
+
+        return CreatedAtAction(
+            nameof(Vehicles),
+            null,
+            ApiResponse<VehicleDto>.Ok(dto, $"{plate} added. You can book a service for it now."));
     }
 
     /// <summary>

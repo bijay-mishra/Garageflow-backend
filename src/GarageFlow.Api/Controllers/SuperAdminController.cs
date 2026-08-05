@@ -236,7 +236,14 @@ public class SuperAdminController(
             Address = request.Address?.Trim() ?? "",
             EnabledModules = string.Join(',', modules),
             IsActive = true,
-            IsListed = false,
+
+            // Listed by default. This started off-by-default so a workshop that
+            // bought this to run its books was not advertised without asking —
+            // but the effect was a directory containing almost nothing, because
+            // nobody knew the setting existed to turn on. Listing is now opt-out
+            // rather than opt-in: the Workshop screen still has the switch, and
+            // a garage that does not want to be found can still say so.
+            IsListed = true,
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -567,6 +574,14 @@ public class SuperAdminController(
         db.RemoveRange(await Owned(db.Customers, companyCode, ct));
         db.RemoveRange(await Owned(db.Services, companyCode, ct));
         db.RemoveRange(await Owned(db.Notifications, companyCode, ct));
+
+        // Support conversations, messages first. Missing them leaves threads
+        // pointing at a company that no longer exists — and because the
+        // operator's inbox reads across tenants with IgnoreQueryFilters, those
+        // orphans do not quietly disappear behind the filter: they sit in the
+        // queue forever, attributed to a company code nobody can open.
+        db.RemoveRange(await Owned(db.SupportMessages, companyCode, ct));
+        db.RemoveRange(await Owned(db.SupportThreads, companyCode, ct));
         db.RemoveRange(await Owned(db.Activities, companyCode, ct));
 
         db.RemoveRange(await db.Branches.Where(x => x.CompanyCode == companyCode).ToListAsync(ct));

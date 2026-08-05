@@ -50,7 +50,11 @@ public class WorkshopDirectoryController(
         [FromQuery] double? lng,
         CancellationToken ct = default)
     {
-        var workshops = db.Workshops.AsNoTracking().Where(w => w.IsListed);
+        // Listed *and* not suspended. A company the operator has switched off
+        // cannot be signed into, so leaving it in the directory would advertise
+        // a garage nobody can actually join.
+        var workshops = db.Workshops.AsNoTracking()
+            .Where(w => w.IsListed && w.IsActive && w.CompanyCode != "");
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
