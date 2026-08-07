@@ -233,8 +233,8 @@ var app = builder.Build();
 // which this API deliberately does not use.
 app.UseExceptionHandler(_ => { });
 
-if (app.Environment.IsDevelopment())
-{
+//if (app.Environment.IsDevelopment())
+//{
     app.UseSwagger();
     app.UseSwaggerUI(options =>
     {
@@ -244,7 +244,7 @@ if (app.Environment.IsDevelopment())
 
     // Landing on the root during development should show the docs.
     app.MapGet("/", () => Results.Redirect("/swagger")).ExcludeFromDescription();
-}
+//}
 
 app.UseCors(CorsPolicy);
 
