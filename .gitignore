@@ -5,6 +5,15 @@ obj/
 .vscode/
 appsettings.*.local.json
 
+# The real server settings: connection string, JWT signing key, SMTP password,
+# merchant keys. This is the file that overrides the development defaults in
+# appsettings.json, so by definition it is the one holding everything worth
+# stealing. It is created on the server and never travels through the repo.
+appsettings.Production.json
+
+# Publish output.
+publish/
+
 # The API console, when it is started in the background. Holds the reset codes
 # that SMTP would otherwise have emailed — never commit it.
 logs/
